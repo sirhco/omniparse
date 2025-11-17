@@ -1,0 +1,9 @@
+{
+  "name": "Test Document",
+  "version": "1.0",
+  "author": "Omniparse Test",
+  "data": {
+    "items": [1, 2, 3],
+    "enabled": true
+  }
+}

@@ -1,0 +1,5 @@
+Hello, World!
+This is a sample plain text file for testing.
+It contains multiple lines.
+Line count: 4
+Character count: 123

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document>
+  <title>Sample XML Document</title>
+  <author>Omniparse Test</author>
+  <content>
+    <paragraph>This is a test XML file.</paragraph>
+    <paragraph>It contains structured data.</paragraph>
+  </content>
+</document>
