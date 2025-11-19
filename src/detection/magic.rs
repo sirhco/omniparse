@@ -1,5 +1,8 @@
 //! Magic byte patterns for file type detection
 
+use std::io::{Cursor, Read};
+use zip::ZipArchive;
+
 /// Magic byte pattern for file type detection
 #[derive(Debug, Clone)]
 pub struct MagicPattern {
@@ -57,6 +60,137 @@ impl MagicPattern {
     }
 }
 
+/// Detect OpenXML format by checking [Content_Types].xml
+/// Returns the specific MIME type if it's an OpenXML document, None otherwise
+pub fn detect_openxml_type(data: &[u8]) -> Option<String> {
+    // Check if it starts with ZIP signature
+    if data.len() < 4 || &data[0..4] != b"PK\x03\x04" {
+        return None;
+    }
+
+    // Try to open as ZIP archive
+    let cursor = Cursor::new(data);
+    let mut archive = ZipArchive::new(cursor).ok()?;
+
+    // First check for OpenDocument format (has mimetype file)
+    if let Ok(mut mimetype_file) = archive.by_name("mimetype") {
+        let mut mimetype = String::new();
+        if mimetype_file.read_to_string(&mut mimetype).is_ok() {
+            let trimmed = mimetype.trim();
+            // Return the exact MIME type from the mimetype file
+            if trimmed.starts_with("application/vnd.oasis.opendocument.") {
+                return Some(trimmed.to_string());
+            }
+        }
+    }
+
+    // If not OpenDocument, check for OpenXML format (has [Content_Types].xml)
+    if let Ok(mut content_types_file) = archive.by_name("[Content_Types].xml") {
+        let mut content = String::new();
+        if content_types_file.read_to_string(&mut content).is_ok() {
+            // Check for specific content type entries to distinguish formats
+            if content.contains("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
+                return Some("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet".to_string());
+            } else if content.contains("application/vnd.openxmlformats-officedocument.presentationml.presentation") {
+                return Some("application/vnd.openxmlformats-officedocument.presentationml.presentation".to_string());
+            } else if content.contains("application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+                return Some("application/vnd.openxmlformats-officedocument.wordprocessingml.document".to_string());
+            }
+        }
+    }
+
+    None
+}
+
+/// Detect OLE2 format type by examining the directory structure
+/// Returns the specific MIME type if it's a recognized OLE2 document (DOC, XLS, PPT), None otherwise
+pub fn detect_ole2_type(data: &[u8]) -> Option<(String, f32)> {
+    // Check if it starts with OLE2 signature
+    if data.len() < 512 || &data[0..8] != b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1" {
+        return None;
+    }
+
+    // OLE2 files contain directory entries that identify the document type
+    // We'll search for specific stream names that are unique to each format
+    
+    // Convert data to searchable format for stream name detection
+    // Stream names in OLE2 are stored in the directory entries
+    
+    // Look for Word-specific streams
+    // Word documents contain "WordDocument" stream
+    if contains_stream_name(data, b"WordDocument") || 
+       contains_stream_name(data, b"Word") {
+        return Some(("application/msword".to_string(), 0.90));
+    }
+    
+    // Look for Excel-specific streams
+    // Excel workbooks contain "Workbook" or "Book" stream
+    if contains_stream_name(data, b"Workbook") || 
+       contains_stream_name(data, b"Book") {
+        return Some(("application/vnd.ms-excel".to_string(), 0.90));
+    }
+    
+    // Look for PowerPoint-specific streams
+    // PowerPoint presentations contain "PowerPoint Document" or "Current User" stream
+    if contains_stream_name(data, b"PowerPoint Document") ||
+       contains_stream_name(data, b"Current User") {
+        return Some(("application/vnd.ms-powerpoint".to_string(), 0.90));
+    }
+    
+    // If we can't determine the specific type, return None
+    // This will allow fallback to extension-based detection
+    None
+}
+
+/// Check if the OLE2 data contains a specific stream name
+/// This searches through the binary data for stream name patterns
+fn contains_stream_name(data: &[u8], stream_name: &[u8]) -> bool {
+    // OLE2 directory entries start at sector 0 (after the 512-byte header)
+    // Each directory entry is 128 bytes
+    // The first 64 bytes of each entry contain the name in UTF-16LE
+    
+    // Search through the data for the stream name
+    // We'll look for both ASCII and UTF-16LE encoded versions
+    
+    // Check for ASCII version (simple search)
+    if search_bytes(data, stream_name) {
+        return true;
+    }
+    
+    // Check for UTF-16LE version (with null bytes between characters)
+    let utf16le_name = to_utf16le(stream_name);
+    if search_bytes(data, &utf16le_name) {
+        return true;
+    }
+    
+    false
+}
+
+/// Search for a byte pattern in data
+fn search_bytes(data: &[u8], pattern: &[u8]) -> bool {
+    if pattern.is_empty() || data.len() < pattern.len() {
+        return false;
+    }
+    
+    for i in 0..=data.len() - pattern.len() {
+        if &data[i..i + pattern.len()] == pattern {
+            return true;
+        }
+    }
+    
+    false
+}
+
+/// Convert ASCII bytes to UTF-16LE encoding
+fn to_utf16le(ascii: &[u8]) -> Vec<u8> {
+    let mut result = Vec::with_capacity(ascii.len() * 2);
+    for &byte in ascii {
+        result.push(byte);
+        result.push(0);
+    }
+    result
+}
+
 /// Get the default magic byte patterns database
 pub fn get_magic_patterns() -> Vec<MagicPattern> {
     vec![
@@ -66,8 +200,8 @@ pub fn get_magic_patterns() -> Vec<MagicPattern> {
             vec![0x50, 0x4B, 0x03, 0x04]), // ZIP signature (DOCX is ZIP-based)
         MagicPattern::new("application/vnd.oasis.opendocument.text", 0, 
             vec![0x50, 0x4B, 0x03, 0x04]), // ZIP signature (ODT is ZIP-based)
-        MagicPattern::new("application/msword", 0, 
-            vec![0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]), // OLE2 signature
+        // Note: OLE2 signature (DOC, XLS, PPT) is handled by detect_ole2_type() function
+        // to distinguish between different OLE2 formats
         MagicPattern::new("application/rtf", 0, b"{\\rtf".to_vec()),
         
         // Image formats
@@ -188,5 +322,97 @@ mod tests {
     fn test_get_magic_patterns_count() {
         let patterns = get_magic_patterns();
         assert!(patterns.len() >= 50, "Should have at least 50 MIME types");
+    }
+    
+    #[test]
+    fn test_detect_ole2_type_with_word_document() {
+        // Create a minimal OLE2 file with WordDocument stream name
+        let mut data = vec![0u8; 1024];
+        // OLE2 header
+        data[0..8].copy_from_slice(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1");
+        // Add "WordDocument" in UTF-16LE somewhere in the data
+        let word_doc_utf16 = to_utf16le(b"WordDocument");
+        data[512..512 + word_doc_utf16.len()].copy_from_slice(&word_doc_utf16);
+        
+        let result = detect_ole2_type(&data);
+        assert!(result.is_some());
+        let (mime_type, confidence) = result.unwrap();
+        assert_eq!(mime_type, "application/msword");
+        assert_eq!(confidence, 0.90);
+    }
+    
+    #[test]
+    fn test_detect_ole2_type_with_workbook() {
+        // Create a minimal OLE2 file with Workbook stream name
+        let mut data = vec![0u8; 1024];
+        // OLE2 header
+        data[0..8].copy_from_slice(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1");
+        // Add "Workbook" in UTF-16LE somewhere in the data
+        let workbook_utf16 = to_utf16le(b"Workbook");
+        data[512..512 + workbook_utf16.len()].copy_from_slice(&workbook_utf16);
+        
+        let result = detect_ole2_type(&data);
+        assert!(result.is_some());
+        let (mime_type, confidence) = result.unwrap();
+        assert_eq!(mime_type, "application/vnd.ms-excel");
+        assert_eq!(confidence, 0.90);
+    }
+    
+    #[test]
+    fn test_detect_ole2_type_with_powerpoint() {
+        // Create a minimal OLE2 file with PowerPoint Document stream name
+        let mut data = vec![0u8; 1024];
+        // OLE2 header
+        data[0..8].copy_from_slice(b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1");
+        // Add "Current User" in UTF-16LE somewhere in the data (PPT-specific)
+        let current_user_utf16 = to_utf16le(b"Current User");
+        data[512..512 + current_user_utf16.len()].copy_from_slice(&current_user_utf16);
+        
+        let result = detect_ole2_type(&data);
+        assert!(result.is_some());
+        let (mime_type, confidence) = result.unwrap();
+        assert_eq!(mime_type, "application/vnd.ms-powerpoint");
+        assert_eq!(confidence, 0.90);
+    }
+    
+    #[test]
+    fn test_detect_ole2_type_invalid_header() {
+        let data = vec![0u8; 512];
+        let result = detect_ole2_type(&data);
+        assert!(result.is_none());
+    }
+    
+    #[test]
+    fn test_detect_ole2_type_too_short() {
+        let data = vec![0xD0, 0xCF, 0x11, 0xE0];
+        let result = detect_ole2_type(&data);
+        assert!(result.is_none());
+    }
+    
+    #[test]
+    fn test_to_utf16le() {
+        let ascii = b"Test";
+        let utf16le = to_utf16le(ascii);
+        assert_eq!(utf16le, vec![b'T', 0, b'e', 0, b's', 0, b't', 0]);
+    }
+    
+    #[test]
+    fn test_search_bytes() {
+        let data = b"Hello World";
+        assert!(search_bytes(data, b"World"));
+        assert!(search_bytes(data, b"Hello"));
+        assert!(!search_bytes(data, b"Goodbye"));
+        assert!(!search_bytes(data, b""));
+    }
+    
+    #[test]
+    fn test_contains_stream_name() {
+        let mut data = vec![0u8; 1024];
+        // Add "WordDocument" in UTF-16LE
+        let word_doc_utf16 = to_utf16le(b"WordDocument");
+        data[100..100 + word_doc_utf16.len()].copy_from_slice(&word_doc_utf16);
+        
+        assert!(contains_stream_name(&data, b"WordDocument"));
+        assert!(!contains_stream_name(&data, b"Workbook"));
     }
 }

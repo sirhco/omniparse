@@ -1,11 +1,11 @@
 [package]
 name = "omniparse"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
-authors = ["Omniparse Contributors"]
+authors = ["Chris Olson"]
 description = "A Rust toolkit for detecting and extracting metadata, text, and content from various file formats"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/omniparse/omniparse"
+repository = "https://github.com/sirhco/omniparse"
 keywords = ["parser", "extraction", "metadata", "mime", "content"]
 categories = ["parsing", "text-processing"]
 
@@ -30,6 +30,13 @@ lopdf = "0.32"
 zip = "0.6"
 tar = "0.4"
 image = "0.24"
+
+# HTML and CSS parsing
+scraper = "0.18"
+cssparser = "0.31"
+
+# Excel/Spreadsheet support
+calamine = "0.24"
 
 # Optional dependencies
 tokio = { version = "1.0", features = ["fs", "io-util", "macros", "rt-multi-thread"], optional = true }

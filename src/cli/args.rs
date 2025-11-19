@@ -22,6 +22,12 @@ use std::path::PathBuf;
 /// This is the main CLI structure that defines all command-line arguments
 /// and options for the Omniparse tool.
 ///
+/// Supports 35+ file formats including:
+/// - Text: TXT, JSON, CSV, XML, HTML, CSS, RTF
+/// - Documents: PDF, DOCX, DOC, XLSX, XLS, PPTX, PPT, ODT, ODS, ODP
+/// - Images: JPEG, PNG, TIFF
+/// - Archives: ZIP, TAR
+///
 /// # Examples
 ///
 /// Basic usage:
@@ -32,7 +38,19 @@ use std::path::PathBuf;
 /// ```
 #[derive(Parser, Debug)]
 #[command(name = "omniparse")]
-#[command(version, about, long_about = None)]
+#[command(version)]
+#[command(about = "A Rust toolkit for detecting and extracting metadata, text, and content from various file formats")]
+#[command(long_about = "Omniparse - Extract text and metadata from 35+ file formats\n\n\
+Supported formats:\n\
+  Text: TXT, JSON, CSV, XML, HTML, CSS, RTF\n\
+  Documents: PDF, DOCX, DOC, XLSX, XLS, PPTX, PPT, ODT, ODS, ODP\n\
+  Images: JPEG, PNG, TIFF\n\
+  Archives: ZIP, TAR\n\n\
+Examples:\n\
+  omniparse document.pdf\n\
+  omniparse --format json webpage.html\n\
+  omniparse --metadata-only spreadsheet.xlsx\n\
+  omniparse --parallel *.pdf *.docx")]
 pub struct Cli {
     /// Input file paths to process
     ///
