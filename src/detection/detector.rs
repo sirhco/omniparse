@@ -4,7 +4,7 @@ use std::path::Path;
 use std::fs::File;
 use std::io::Read;
 use crate::core::Result;
-use super::magic::{MagicPattern, get_magic_patterns};
+use super::magic::{MagicPattern, get_magic_patterns, detect_openxml_type, detect_ole2_type};
 use super::confidence::calculate_confidence;
 
 /// Detection method used to identify file type
@@ -52,7 +52,31 @@ impl TypeDetector {
     
     /// Detect file type from bytes
     pub fn detect_from_bytes(&self, data: &[u8]) -> DetectionResult {
-        // Try magic bytes first
+        // Check for OpenXML formats first (XLSX, PPTX, DOCX, etc.)
+        // This needs to be done before generic ZIP detection
+        if data.len() >= 4 && &data[0..4] == b"PK\x03\x04" {
+            if let Some(mime_type) = detect_openxml_type(data) {
+                return DetectionResult {
+                    mime_type,
+                    confidence: 0.95,
+                    detected_by: DetectionMethod::MagicBytes,
+                };
+            }
+        }
+        
+        // Check for OLE2 formats (DOC, XLS, PPT)
+        // This needs to be done before generic OLE2 detection
+        if data.len() >= 8 && &data[0..8] == b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1" {
+            if let Some((mime_type, confidence)) = detect_ole2_type(data) {
+                return DetectionResult {
+                    mime_type,
+                    confidence,
+                    detected_by: DetectionMethod::MagicBytes,
+                };
+            }
+        }
+        
+        // Try magic bytes
         if let Some((mime_type, confidence)) = self.check_magic_bytes(data) {
             return DetectionResult {
                 mime_type,
@@ -86,7 +110,31 @@ impl TypeDetector {
         let bytes_read = file.read(&mut buffer)?;
         buffer.truncate(bytes_read);
         
-        // Try magic bytes first
+        // Check for OpenXML formats first (XLSX, PPTX, DOCX, etc.)
+        // This needs to be done before generic ZIP detection
+        if buffer.len() >= 4 && &buffer[0..4] == b"PK\x03\x04" {
+            if let Some(mime_type) = detect_openxml_type(&buffer) {
+                return Ok(DetectionResult {
+                    mime_type,
+                    confidence: 0.95,
+                    detected_by: DetectionMethod::MagicBytes,
+                });
+            }
+        }
+        
+        // Check for OLE2 formats (DOC, XLS, PPT)
+        // This needs to be done before generic OLE2 detection
+        if buffer.len() >= 8 && &buffer[0..8] == b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1" {
+            if let Some((mime_type, confidence)) = detect_ole2_type(&buffer) {
+                return Ok(DetectionResult {
+                    mime_type,
+                    confidence,
+                    detected_by: DetectionMethod::MagicBytes,
+                });
+            }
+        }
+        
+        // Try magic bytes
         if let Some((mime_type, confidence)) = self.check_magic_bytes(&buffer) {
             return Ok(DetectionResult {
                 mime_type,
@@ -161,6 +209,12 @@ impl TypeDetector {
                 return Some(("text/xml".to_string(), confidence));
             }
             
+            // Check for CSS-like content
+            if self.looks_like_css(text) {
+                // CSS detection has lower confidence (0.6) as specified in requirements
+                return Some(("text/css".to_string(), 0.6));
+            }
+            
             // Check for CSV-like content
             if text.lines().count() > 1 {
                 let first_line = text.lines().next().unwrap_or("");
@@ -176,6 +230,53 @@ impl TypeDetector {
         }
         
         None
+    }
+    
+    /// Check if content looks like CSS
+    fn looks_like_css(&self, text: &str) -> bool {
+        let trimmed = text.trim();
+        
+        // Empty or very short content is unlikely to be CSS
+        if trimmed.len() < 10 {
+            return false;
+        }
+        
+        // Count CSS-like patterns
+        let mut css_indicators = 0;
+        
+        // Check for CSS selectors and rules (e.g., "selector { property: value; }")
+        if trimmed.contains('{') && trimmed.contains('}') && trimmed.contains(':') {
+            css_indicators += 1;
+        }
+        
+        // Check for common CSS at-rules
+        let at_rules = ["@import", "@media", "@charset", "@font-face", "@keyframes", "@supports"];
+        for at_rule in &at_rules {
+            if trimmed.contains(at_rule) {
+                css_indicators += 1;
+                break;
+            }
+        }
+        
+        // Check for common CSS properties
+        let common_properties = [
+            "color:", "background:", "margin:", "padding:", "font-",
+            "border:", "width:", "height:", "display:", "position:"
+        ];
+        for prop in &common_properties {
+            if trimmed.contains(prop) {
+                css_indicators += 1;
+                break;
+            }
+        }
+        
+        // Check for semicolons (common in CSS)
+        if trimmed.contains(';') {
+            css_indicators += 1;
+        }
+        
+        // Require at least 2 indicators to consider it CSS
+        css_indicators >= 2
     }
     
     /// Detect from file extension as fallback
@@ -225,6 +326,7 @@ impl TypeDetector {
             "json" => "application/json",
             "xml" => "text/xml",
             "html" | "htm" => "text/html",
+            "css" => "text/css",
             "md" => "text/markdown",
             
             // Audio
@@ -257,7 +359,31 @@ impl Default for TypeDetector {
 
 impl Detector for TypeDetector {
     fn detect(&self, data: &[u8], filename: Option<&str>) -> DetectionResult {
-        // Try magic bytes first
+        // Check for OpenXML formats first (XLSX, PPTX, DOCX, etc.)
+        // This needs to be done before generic ZIP detection
+        if data.len() >= 4 && &data[0..4] == b"PK\x03\x04" {
+            if let Some(mime_type) = detect_openxml_type(data) {
+                return DetectionResult {
+                    mime_type,
+                    confidence: 0.95,
+                    detected_by: DetectionMethod::MagicBytes,
+                };
+            }
+        }
+        
+        // Check for OLE2 formats (DOC, XLS, PPT)
+        // This needs to be done before generic OLE2 detection
+        if data.len() >= 8 && &data[0..8] == b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1" {
+            if let Some((mime_type, confidence)) = detect_ole2_type(data) {
+                return DetectionResult {
+                    mime_type,
+                    confidence,
+                    detected_by: DetectionMethod::MagicBytes,
+                };
+            }
+        }
+        
+        // Try magic bytes
         if let Some((mime_type, confidence)) = self.check_magic_bytes(data) {
             return DetectionResult {
                 mime_type,

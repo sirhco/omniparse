@@ -1,6 +1,15 @@
-//! Omniparse - A Rust toolkit for detecting and extracting metadata, text, and content from various file formats
+//! Omniparse - A Rust toolkit for detecting and extracting metadata, text, and content from 35+ file formats
 //!
 //! This library provides both synchronous and asynchronous APIs for content extraction.
+//!
+//! # Supported Formats
+//!
+//! - **Text**: Plain text, JSON, CSV, XML, HTML, CSS, RTF
+//! - **Documents**: PDF, DOCX, DOC, XLSX, XLS, PPTX, PPT, ODT, ODS, ODP
+//! - **Images**: JPEG, PNG, TIFF (metadata only)
+//! - **Archives**: ZIP, TAR
+//!
+//! See [SUPPORTED_FORMATS.md](https://github.com/omniparse/omniparse/blob/main/SUPPORTED_FORMATS.md) for complete details.
 //!
 //! # Examples
 //!
@@ -12,6 +21,31 @@
 //! let result = extract_from_path("document.pdf")?;
 //! println!("MIME type: {}", result.mime_type);
 //! println!("Content: {:?}", result.content);
+//! # Ok::<(), omniparse::Error>(())
+//! ```
+//!
+//! ## Extract from HTML
+//!
+//! ```no_run
+//! use omniparse::extract_from_path;
+//!
+//! let result = extract_from_path("webpage.html")?;
+//! if let Some(title) = result.metadata.get("title") {
+//!     println!("Page title: {:?}", title);
+//! }
+//! # Ok::<(), omniparse::Error>(())
+//! ```
+//!
+//! ## Extract from spreadsheets
+//!
+//! ```no_run
+//! use omniparse::extract_from_path;
+//!
+//! // Works with XLSX, XLS, and ODS
+//! let result = extract_from_path("data.xlsx")?;
+//! if let Some(sheet_count) = result.metadata.get("sheet_count") {
+//!     println!("Number of sheets: {:?}", sheet_count);
+//! }
 //! # Ok::<(), omniparse::Error>(())
 //! ```
 //!

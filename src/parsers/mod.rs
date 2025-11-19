@@ -255,11 +255,21 @@ impl Default for ParserRegistry {
         registry.register(Box::new(text::JsonParser));
         registry.register(Box::new(text::CsvParser));
         registry.register(Box::new(text::XmlParser));
+        registry.register(Box::new(text::HtmlParser));
+        registry.register(Box::new(text::CssParser));
+        registry.register(Box::new(text::RtfParser));
         
         // Register Phase 2 document parsers
         registry.register(Box::new(document::PdfParser));
         registry.register(Box::new(document::DocxParser));
         registry.register(Box::new(document::OdtParser));
+        registry.register(Box::new(document::XlsxParser));
+        registry.register(Box::new(document::PptxParser));
+        registry.register(Box::new(document::OdsParser));
+        registry.register(Box::new(document::OdpParser));
+        registry.register(Box::new(document::XlsParser));
+        registry.register(Box::new(document::DocParser));
+        registry.register(Box::new(document::PptParser));
         
         // Register Phase 3 image parsers
         registry.register(Box::new(image::JpegParser));

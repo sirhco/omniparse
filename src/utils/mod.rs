@@ -4,6 +4,7 @@
 //!
 //! - **streaming**: Memory-efficient processing of large files
 //! - **parallel**: Parallel batch processing of multiple files
+//! - **security**: Security checks for safe file parsing
 //!
 //! # Examples
 //!
@@ -45,3 +46,4 @@
 
 pub mod streaming;
 pub mod parallel;
+pub mod security;
