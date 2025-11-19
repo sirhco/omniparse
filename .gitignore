@@ -210,7 +210,8 @@ backups/
 *.dll
 *.so
 *.dylib
-core
+/core
+core.dump
 core.*
 vgcore.*
 callgrind.out.*
