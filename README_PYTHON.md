@@ -16,7 +16,7 @@ Python bindings for Omniparse - a high-performance library for detecting and ext
 Install from PyPI:
 
 ```bash
-pip install omniparse
+pip install omniparse-rs
 ```
 
 ### Requirements

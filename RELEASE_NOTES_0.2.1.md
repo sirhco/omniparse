@@ -69,7 +69,7 @@ is_supported = omniparse.is_mime_supported("application/pdf")
 
 ```bash
 # From PyPI (coming soon)
-pip install omniparse
+pip install omniparse-rs
 
 # From source
 pip install maturin
@@ -275,7 +275,7 @@ df = pd.DataFrame([
 
 1. **Install from PyPI** (coming soon):
    ```bash
-   pip install omniparse
+   pip install omniparse-rs
    ```
 
 2. **Or build from source**:

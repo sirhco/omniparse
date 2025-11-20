@@ -3,7 +3,7 @@ requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "omniparse"
+name = "omniparse-rs"
 version = "0.2.1"
 description = "A Python library for detecting and extracting metadata, text, and content from various file formats"
 authors = [{name = "Chris Olson"}]

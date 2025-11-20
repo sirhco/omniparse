@@ -7,11 +7,11 @@ file parsing and metadata extraction capabilities.
 
 try:
     from omniparse._omniparse import (
-        extract_from_path,
-        extract_from_bytes,
-        supported_mime_types,
-        is_mime_supported,
         ExtractionResult,
+        extract_from_bytes,
+        extract_from_path,
+        is_mime_supported,
+        supported_mime_types,
     )
 except ImportError:
     # Fallback for development mode before building
@@ -20,7 +20,7 @@ except ImportError:
         "Please build the package using 'maturin develop' or install from PyPI."
     )
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 __all__ = [
     "extract_from_path",
