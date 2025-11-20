@@ -6,7 +6,7 @@ file parsing and metadata extraction capabilities.
 """
 
 try:
-    from omniparse._omniparse import (
+    from omniparse.omniparse import (
         ExtractionResult,
         extract_from_bytes,
         extract_from_path,
@@ -20,7 +20,7 @@ except ImportError:
         "Please build the package using 'maturin develop' or install from PyPI."
     )
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 __all__ = [
     "extract_from_path",

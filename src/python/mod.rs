@@ -6,12 +6,12 @@
 use pyo3::prelude::*;
 use pyo3::wrap_pyfunction;
 
-mod types;
-mod functions;
 mod errors;
+mod functions;
+mod types;
 
+use functions::{extract_from_bytes, extract_from_path, is_mime_supported, supported_mime_types};
 use types::PyExtractionResult;
-use functions::{extract_from_path, extract_from_bytes, supported_mime_types, is_mime_supported};
 
 /// Python module for Omniparse
 ///
@@ -22,15 +22,15 @@ use functions::{extract_from_path, extract_from_bytes, supported_mime_types, is_
 /// - is_mime_supported: Check if a MIME type is supported
 /// - ExtractionResult: Class representing extraction results
 #[pymodule]
-fn _omniparse(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn omniparse(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Register functions
     m.add_function(wrap_pyfunction!(extract_from_path, m)?)?;
     m.add_function(wrap_pyfunction!(extract_from_bytes, m)?)?;
     m.add_function(wrap_pyfunction!(supported_mime_types, m)?)?;
     m.add_function(wrap_pyfunction!(is_mime_supported, m)?)?;
-    
+
     // Register classes
     m.add_class::<PyExtractionResult>()?;
-    
+
     Ok(())
 }

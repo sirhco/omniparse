@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "omniparse-rs"
-version = "0.2.1"
+version = "0.2.2"
 description = "A Python library for detecting and extracting metadata, text, and content from various file formats"
 authors = [{name = "Chris Olson"}]
 license = {text = "MIT OR Apache-2.0"}
@@ -32,9 +32,9 @@ Homepage = "https://github.com/sirhco/omniparse"
 Repository = "https://github.com/sirhco/omniparse"
 
 [tool.maturin]
-features = ["pyo3/extension-module", "pyo3/generate-import-lib"]
+features = ["python"]
 python-source = "python"
-module-name = "omniparse._omniparse"
+module-name = "omniparse.omniparse"
 
 [tool.pytest.ini_options]
 testpaths = ["python/tests"]
