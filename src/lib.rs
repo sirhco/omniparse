@@ -77,6 +77,10 @@ pub mod detection;
 pub mod parsers;
 pub mod utils;
 
+// Python bindings module (only compiled when python feature is enabled)
+#[cfg(feature = "python")]
+pub mod python;
+
 use std::path::Path;
 
 // Re-export core types for convenience

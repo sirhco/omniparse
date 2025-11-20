@@ -1,6 +1,6 @@
 [package]
 name = "omniparse"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2024"
 authors = ["Chris Olson"]
 description = "A Rust toolkit for detecting and extracting metadata, text, and content from various file formats"
@@ -12,6 +12,7 @@ categories = ["parsing", "text-processing"]
 [lib]
 name = "omniparse"
 path = "src/lib.rs"
+crate-type = ["cdylib", "rlib"]
 
 [[bin]]
 name = "omniparse"
@@ -41,11 +42,13 @@ calamine = "0.24"
 # Optional dependencies
 tokio = { version = "1.0", features = ["fs", "io-util", "macros", "rt-multi-thread"], optional = true }
 rayon = { version = "1.10", optional = true }
+pyo3 = { version = "0.22", features = ["extension-module", "generate-import-lib"], optional = true }
 
 [features]
 default = []
 async = ["tokio"]
 parallel = ["rayon"]
+python = ["pyo3"]
 
 [dev-dependencies]
 futures = "0.3"
