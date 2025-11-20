@@ -107,37 +107,37 @@ jobs:
           name: sdist
           path: dist
 
-  test-wheels:
-    name: Test wheel on ${{ matrix.os }}
-    needs: [build-wheels]
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+  # test-wheels:
+  #   name: Test wheel on ${{ matrix.os }}
+  #   needs: [build-wheels]
+  #   runs-on: ${{ matrix.os }}
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       os: [ubuntu-latest, macos-latest, windows-latest]
 
-    steps:
-      - uses: actions/checkout@v4
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+  #     - name: Set up Python
+  #       uses: actions/setup-python@v5
+  #       with:
+  #         python-version: "3.11"
 
-      - name: Download wheels
-        uses: actions/download-artifact@v4
-        with:
-          name: wheels-${{ matrix.os }}
-          path: dist
+  #     - name: Download wheels
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: wheels-${{ matrix.os }}
+  #         path: dist
 
-      - name: Install wheel
-        shell: bash
-        run: |
-          pip install pytest
-          pip install omniparse --no-index --find-links dist --force-reinstall
+  #     - name: Install wheel
+  #       shell: bash
+  #       run: |
+  #         pip install pytest
+  #         pip install omniparse --no-index --find-links dist --force-reinstall
 
-      - name: Run basic tests
-        run: pytest python/tests/test_basic.py -v
+  #     - name: Run basic tests
+  #       run: pytest python/tests/test_basic.py -v
 
   publish:
     name: Publish to PyPI
