@@ -42,7 +42,7 @@ calamine = "0.24"
 # Optional dependencies
 tokio = { version = "1.0", features = ["fs", "io-util", "macros", "rt-multi-thread"], optional = true }
 rayon = { version = "1.10", optional = true }
-pyo3 = { version = "0.22", features = ["extension-module"], optional = true }
+pyo3 = { version = "0.22", features = ["extension-module", "generate-import-lib"], optional = true }
 
 [features]
 default = []

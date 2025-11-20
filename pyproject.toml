@@ -32,7 +32,7 @@ Homepage = "https://github.com/sirhco/omniparse"
 Repository = "https://github.com/sirhco/omniparse"
 
 [tool.maturin]
-features = ["pyo3/extension-module"]
+features = ["python"]
 python-source = "python"
 module-name = "omniparse._omniparse"
 
