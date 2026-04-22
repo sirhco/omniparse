@@ -1,5 +1,6 @@
 //! Image format parsers
 
+mod exif;
 mod jpeg;
 mod png;
 mod tiff;

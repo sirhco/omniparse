@@ -64,62 +64,119 @@ fn extract_text(doc: &Document) -> Result<String> {
 fn extract_metadata(doc: &Document) -> Result<Metadata> {
     let mut metadata = Metadata::new();
 
-    // Get page count
-    let page_count = doc.get_pages().len() as i64;
-    metadata.insert("page_count".to_string(), MetadataValue::Number(page_count));
+    // Page count
+    let pages = doc.get_pages();
+    metadata.insert("page_count".to_string(), MetadataValue::Number(pages.len() as i64));
 
-    // Try to extract document info dictionary
-    if let Ok(info_dict) = doc.trailer.get(b"Info") {
-        if let Ok(info_ref) = info_dict.as_reference() {
-            if let Ok(info_obj) = doc.get_object(info_ref) {
-                if let Ok(info_dict) = info_obj.as_dict() {
-                    // Extract title
-                    if let Ok(title) = info_dict.get(b"Title") {
-                        if let Ok(title_str) = title.as_string() {
-                            metadata.insert("title".to_string(), MetadataValue::Text(title_str.to_string()));
-                        }
-                    }
+    // PDF spec version ("1.4", "1.7", "2.0", ...)
+    metadata.insert(
+        "pdf_version".to_string(),
+        MetadataValue::Text(doc.version.clone()),
+    );
 
-                    // Extract author
-                    if let Ok(author) = info_dict.get(b"Author") {
-                        if let Ok(author_str) = author.as_string() {
-                            metadata.insert("author".to_string(), MetadataValue::Text(author_str.to_string()));
-                        }
-                    }
+    // Encryption flag — presence of /Encrypt in the trailer indicates an encrypted doc.
+    let encrypted = doc.trailer.get(b"Encrypt").is_ok();
+    metadata.insert("encrypted".to_string(), MetadataValue::Boolean(encrypted));
 
-                    // Extract creation date
-                    if let Ok(creation_date) = info_dict.get(b"CreationDate") {
-                        if let Ok(date_str) = creation_date.as_string() {
-                            // PDF dates are in format: D:YYYYMMDDHHmmSSOHH'mm'
-                            // For simplicity, store as text for now
-                            metadata.insert("creation_date".to_string(), MetadataValue::Text(date_str.to_string()));
-                        }
-                    }
-
-                    // Extract subject
-                    if let Ok(subject) = info_dict.get(b"Subject") {
-                        if let Ok(subject_str) = subject.as_string() {
-                            metadata.insert("subject".to_string(), MetadataValue::Text(subject_str.to_string()));
-                        }
-                    }
-
-                    // Extract creator
-                    if let Ok(creator) = info_dict.get(b"Creator") {
-                        if let Ok(creator_str) = creator.as_string() {
-                            metadata.insert("creator".to_string(), MetadataValue::Text(creator_str.to_string()));
-                        }
-                    }
-
-                    // Extract producer
-                    if let Ok(producer) = info_dict.get(b"Producer") {
-                        if let Ok(producer_str) = producer.as_string() {
-                            metadata.insert("producer".to_string(), MetadataValue::Text(producer_str.to_string()));
-                        }
-                    }
+    // Info dictionary (Title/Author/Subject/Creator/Producer/CreationDate)
+    if let Some(info_dict) = resolve_info_dict(doc) {
+        for (pdf_key, out_key) in [
+            (&b"Title"[..], "title"),
+            (&b"Author"[..], "author"),
+            (&b"Subject"[..], "subject"),
+            (&b"Creator"[..], "creator"),
+            (&b"Producer"[..], "producer"),
+            (&b"CreationDate"[..], "creation_date"),
+            (&b"ModDate"[..], "modification_date"),
+            (&b"Keywords"[..], "keywords"),
+        ] {
+            if let Ok(obj) = info_dict.get(pdf_key) {
+                if let Ok(s) = obj.as_string() {
+                    metadata.insert(out_key.to_string(), MetadataValue::Text(s.to_string()));
                 }
             }
         }
     }
 
+    // Catalog-level fields: page_layout, page_mode, AcroForm, Names/EmbeddedFiles
+    if let Some(catalog) = resolve_catalog(doc) {
+        if let Ok(page_layout) = catalog.get(b"PageLayout") {
+            if let Ok(s) = page_layout.as_name_str() {
+                metadata.insert("page_layout".to_string(), MetadataValue::Text(s.to_string()));
+            }
+        }
+        if let Ok(page_mode) = catalog.get(b"PageMode") {
+            if let Ok(s) = page_mode.as_name_str() {
+                metadata.insert("page_mode".to_string(), MetadataValue::Text(s.to_string()));
+            }
+        }
+
+        // AcroForm /Fields count (top-level form field array length)
+        let form_fields_count = catalog
+            .get(b"AcroForm")
+            .ok()
+            .and_then(|v| dereference(doc, v))
+            .and_then(|d| d.as_dict().ok())
+            .and_then(|d| d.get(b"Fields").ok())
+            .and_then(|v| dereference(doc, v))
+            .and_then(|v| v.as_array().ok())
+            .map(|a| a.len())
+            .unwrap_or(0);
+        metadata.insert(
+            "form_fields_count".to_string(),
+            MetadataValue::Number(form_fields_count as i64),
+        );
+
+        // Attachments: /Names -> /EmbeddedFiles -> /Names array (pairs of [name, fileSpec])
+        let attachments_count = catalog
+            .get(b"Names")
+            .ok()
+            .and_then(|v| dereference(doc, v))
+            .and_then(|d| d.as_dict().ok())
+            .and_then(|d| d.get(b"EmbeddedFiles").ok())
+            .and_then(|v| dereference(doc, v))
+            .and_then(|d| d.as_dict().ok())
+            .and_then(|d| d.get(b"Names").ok())
+            .and_then(|v| dereference(doc, v))
+            .and_then(|v| v.as_array().ok())
+            .map(|a| a.len() / 2)
+            .unwrap_or(0);
+        metadata.insert(
+            "attachments_count".to_string(),
+            MetadataValue::Number(attachments_count as i64),
+        );
+    }
+
+    // Annotations: sum /Annots array lengths across pages.
+    let annotations_count: usize = pages
+        .values()
+        .filter_map(|oid| doc.get_object(*oid).ok())
+        .filter_map(|obj| obj.as_dict().ok())
+        .filter_map(|page_dict| page_dict.get(b"Annots").ok())
+        .filter_map(|v| dereference(doc, v))
+        .filter_map(|v| v.as_array().ok().map(|a| a.len()))
+        .sum();
+    metadata.insert(
+        "annotations_count".to_string(),
+        MetadataValue::Number(annotations_count as i64),
+    );
+
     Ok(metadata)
+}
+
+fn resolve_info_dict(doc: &Document) -> Option<&lopdf::Dictionary> {
+    let info = doc.trailer.get(b"Info").ok()?;
+    dereference(doc, info)?.as_dict().ok()
+}
+
+fn resolve_catalog(doc: &Document) -> Option<&lopdf::Dictionary> {
+    let root = doc.trailer.get(b"Root").ok()?;
+    dereference(doc, root)?.as_dict().ok()
+}
+
+fn dereference<'a>(doc: &'a Document, obj: &'a lopdf::Object) -> Option<&'a lopdf::Object> {
+    match obj {
+        lopdf::Object::Reference(r) => doc.get_object(*r).ok(),
+        other => Some(other),
+    }
 }

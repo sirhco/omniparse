@@ -30,6 +30,8 @@ lopdf = "0.32"
 zip = "0.6"
 tar = "0.4"
 image = "0.24"
+kamadak-exif = "0.5"
+flate2 = "1.0"
 
 # HTML and CSS parsing
 scraper = "0.18"

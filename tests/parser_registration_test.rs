@@ -1,126 +1,75 @@
-//! Test to verify all parsers are registered correctly
+//! Test to verify all parsers are registered correctly.
+//!
+//! Assertions check for required MIME types rather than an exact count — new
+//! parsers are added regularly and the count is a moving target.
 
-use omniparse::{supported_mime_types, is_mime_supported};
+use omniparse::{is_mime_supported, supported_mime_types};
+
+const REQUIRED_MIME_TYPES: &[&str] = &[
+    // Text
+    "text/plain",
+    "application/json",
+    "text/json",
+    "text/csv",
+    "text/tab-separated-values",
+    "application/xml",
+    "text/xml",
+    "text/html",
+    "text/css",
+    "application/rtf",
+    // Documents
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/docx",
+    "application/vnd.oasis.opendocument.text",
+    "application/odt",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.oasis.opendocument.spreadsheet",
+    "application/vnd.oasis.opendocument.presentation",
+    "application/vnd.ms-excel",
+    "application/msword",
+    "application/vnd.ms-powerpoint",
+    // Images
+    "image/jpeg",
+    "image/jpg",
+    "image/png",
+    "image/tiff",
+    "image/tif",
+    // Archives
+    "application/zip",
+    "application/x-zip-compressed",
+    "application/x-tar",
+    "application/tar",
+];
 
 #[test]
-fn test_all_parsers_registered() {
+fn test_all_required_parsers_registered() {
     let supported = supported_mime_types();
-    
-    // Expected MIME types from all parsers
-    let expected_types = vec![
-        // Text parsers
-        "text/plain",
-        "application/json",
-        "text/json",
-        "text/csv",
-        "text/tab-separated-values",
-        "application/xml",
-        "text/xml",
-        // Document parsers
-        "application/pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/docx",
-        "application/vnd.oasis.opendocument.text",
-        "application/odt",
-        // Image parsers
-        "image/jpeg",
-        "image/jpg",
-        "image/png",
-        "image/tiff",
-        "image/tif",
-        // Archive parsers
-        "application/zip",
-        "application/x-zip-compressed",
-        "application/x-tar",
-        "application/tar",
-    ];
-    
-    println!("Supported MIME types ({}):", supported.len());
-    for mime_type in &supported {
-        println!("  - {}", mime_type);
-    }
-    
-    // Verify all expected types are present
-    for expected in &expected_types {
+    for required in REQUIRED_MIME_TYPES {
         assert!(
-            supported.contains(&expected.to_string()),
-            "MIME type '{}' is not in supported list",
-            expected
-        );
-    }
-    
-    // Verify the count matches
-    assert_eq!(
-        supported.len(),
-        expected_types.len(),
-        "Expected {} MIME types, but found {}",
-        expected_types.len(),
-        supported.len()
-    );
-}
-
-#[test]
-fn test_is_mime_supported_for_all_formats() {
-    // Test all implemented formats
-    let formats = vec![
-        // Text formats
-        ("text/plain", true),
-        ("application/json", true),
-        ("text/json", true),
-        ("text/csv", true),
-        ("text/tab-separated-values", true),
-        ("application/xml", true),
-        ("text/xml", true),
-        // Document formats
-        ("application/pdf", true),
-        ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", true),
-        ("application/docx", true),
-        ("application/vnd.oasis.opendocument.text", true),
-        ("application/odt", true),
-        // Image formats
-        ("image/jpeg", true),
-        ("image/jpg", true),
-        ("image/png", true),
-        ("image/tiff", true),
-        ("image/tif", true),
-        // Archive formats
-        ("application/zip", true),
-        ("application/x-zip-compressed", true),
-        ("application/x-tar", true),
-        ("application/tar", true),
-        // Unsupported formats
-        ("application/x-custom", false),
-        ("text/html", false),
-        ("video/mp4", false),
-    ];
-    
-    for (mime_type, expected) in formats {
-        assert_eq!(
-            is_mime_supported(mime_type),
-            expected,
-            "is_mime_supported('{}') returned {}, expected {}",
-            mime_type,
-            !expected,
-            expected
+            supported.contains(&required.to_string()),
+            "required MIME type '{}' missing from registry",
+            required
         );
     }
 }
 
 #[test]
-fn test_parser_count() {
-    // We have 12 parsers total:
-    // - 4 text parsers (PlainText, Json, Csv, Xml)
-    // - 3 document parsers (Pdf, Docx, Odt)
-    // - 3 image parsers (Jpeg, Png, Tiff)
-    // - 2 archive parsers (Zip, Tar)
-    
-    let supported = supported_mime_types();
-    
-    // Total unique MIME types: 21
-    assert_eq!(
-        supported.len(),
-        21,
-        "Expected 21 MIME types, found {}",
-        supported.len()
-    );
+fn test_is_mime_supported_for_known_formats() {
+    for mime in REQUIRED_MIME_TYPES {
+        assert!(is_mime_supported(mime), "expected {} to be supported", mime);
+    }
+    for mime in ["application/x-custom", "video/mp4", "audio/flac"] {
+        assert!(
+            !is_mime_supported(mime),
+            "did not expect {} to be supported",
+            mime
+        );
+    }
+}
+
+#[test]
+fn test_registry_is_non_empty() {
+    assert!(supported_mime_types().len() >= REQUIRED_MIME_TYPES.len());
 }

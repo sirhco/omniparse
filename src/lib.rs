@@ -190,8 +190,7 @@ pub fn extract_from_bytes(data: &[u8], mime_hint: Option<&str>) -> Result<Extrac
 /// }
 /// ```
 pub fn supported_mime_types() -> Vec<String> {
-    let registry = parsers::ParserRegistry::default();
-    registry.supported_types()
+    parsers::default_registry().supported_types()
 }
 
 /// Check if a specific MIME type is supported.
@@ -221,8 +220,7 @@ pub fn supported_mime_types() -> Vec<String> {
 /// }
 /// ```
 pub fn is_mime_supported(mime_type: &str) -> bool {
-    let registry = parsers::ParserRegistry::default();
-    registry.get_parser(mime_type).is_some()
+    parsers::default_registry().get_parser(mime_type).is_some()
 }
 
 /// Extract text and metadata from a file asynchronously.

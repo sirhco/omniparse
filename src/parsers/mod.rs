@@ -58,6 +58,18 @@
 use crate::core::{ExtractionResult, Result};
 use std::collections::HashMap;
 use std::io::Read;
+use std::sync::OnceLock;
+
+static DEFAULT_REGISTRY: OnceLock<ParserRegistry> = OnceLock::new();
+
+/// Shared process-wide default parser registry.
+///
+/// Unlike `ParserRegistry::default()`, which allocates a fresh registry on every
+/// call, this returns a reference to a single lazily-initialized instance.
+/// Prefer this for read-only lookups in hot paths.
+pub fn default_registry() -> &'static ParserRegistry {
+    DEFAULT_REGISTRY.get_or_init(ParserRegistry::default)
+}
 
 /// Trait that all format-specific parsers must implement
 ///

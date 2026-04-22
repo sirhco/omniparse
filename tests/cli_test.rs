@@ -23,7 +23,7 @@ fn test_cli_help_flag() {
     cmd.arg("--help")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Rust toolkit"))
+        .stdout(predicate::str::contains("Omniparse"))
         .stdout(predicate::str::contains("Usage:"));
 }
 
