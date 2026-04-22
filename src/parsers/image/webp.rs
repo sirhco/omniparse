@@ -1,4 +1,4 @@
-//! JPEG image parser
+//! WebP image parser. Extracts dimensions, color type, and any embedded EXIF.
 
 use crate::core::{Error, ExtractionResult, Metadata, MetadataValue, Result};
 use crate::parsers::Parser;
@@ -7,29 +7,35 @@ use crate::parsers::image::maybe_ocr_content;
 use image::io::Reader as ImageReader;
 use std::io::Cursor;
 
-/// Parser for JPEG images
-pub struct JpegParser;
+pub struct WebpParser;
 
-impl Parser for JpegParser {
+impl Parser for WebpParser {
+    fn name(&self) -> &str {
+        "WebpParser"
+    }
+
     fn supported_types(&self) -> &[&str] {
-        &["image/jpeg", "image/jpg"]
+        &["image/webp"]
     }
 
     fn parse(&self, data: &[u8], mime_type: &str) -> Result<ExtractionResult> {
         let img = ImageReader::new(Cursor::new(data))
             .with_guessed_format()
-            .map_err(|e| Error::ParseError(format!("Failed to read JPEG: {}", e)))?
+            .map_err(|e| Error::ParseError(format!("Failed to read WebP: {}", e)))?
             .decode()
-            .map_err(|e| Error::ParseError(format!("Failed to decode JPEG: {}", e)))?;
+            .map_err(|e| Error::ParseError(format!("Failed to decode WebP: {}", e)))?;
 
         let mut metadata = Metadata::new();
-        metadata.insert("width".to_string(), MetadataValue::Number(img.width() as i64));
-        metadata.insert("height".to_string(), MetadataValue::Number(img.height() as i64));
+        metadata.insert("width".into(), MetadataValue::Number(img.width() as i64));
+        metadata.insert("height".into(), MetadataValue::Number(img.height() as i64));
         metadata.insert(
-            "color_type".to_string(),
+            "color_type".into(),
             MetadataValue::Text(format!("{:?}", img.color())),
         );
 
+        // WebP stores EXIF in the "EXIF" RIFF chunk. `kamadak-exif`'s reader
+        // understands WebP containers natively, so this call is identical to
+        // the JPEG/TIFF path.
         for (key, value) in extract_exif_fields(data) {
             metadata.insert(key, value);
         }
@@ -42,9 +48,5 @@ impl Parser for JpegParser {
             metadata,
             detection_confidence: 0.0,
         })
-    }
-
-    fn name(&self) -> &str {
-        "JpegParser"
     }
 }

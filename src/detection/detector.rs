@@ -327,7 +327,8 @@ impl TypeDetector {
             "xml" => "text/xml",
             "html" | "htm" => "text/html",
             "css" => "text/css",
-            "md" => "text/markdown",
+            "md" | "markdown" => "text/markdown",
+            "epub" => "application/epub+zip",
             
             // Audio
             "mp3" => "audio/mpeg",

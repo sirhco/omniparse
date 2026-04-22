@@ -1,8 +1,9 @@
 //! TIFF image parser
 
-use crate::core::{Content, Error, ExtractionResult, Metadata, MetadataValue, Result};
+use crate::core::{Error, ExtractionResult, Metadata, MetadataValue, Result};
 use crate::parsers::Parser;
 use crate::parsers::image::exif::extract_exif_fields;
+use crate::parsers::image::maybe_ocr_content;
 use image::io::Reader as ImageReader;
 use std::io::Cursor;
 
@@ -45,10 +46,12 @@ impl Parser for TiffParser {
         for (key, value) in extract_exif_fields(data) {
             metadata.insert(key, value);
         }
-        
+
+        let content = maybe_ocr_content(data, &mut metadata);
+
         Ok(ExtractionResult {
             mime_type: mime_type.to_string(),
-            content: Content::None,
+            content,
             metadata,
             detection_confidence: 0.0,
         })

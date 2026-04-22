@@ -4,9 +4,11 @@
 //!
 //! # Supported Formats
 //!
-//! - **Text**: Plain text, JSON, CSV, XML, HTML, CSS, RTF
-//! - **Documents**: PDF, DOCX, DOC, XLSX, XLS, PPTX, PPT, ODT, ODS, ODP
-//! - **Images**: JPEG, PNG, TIFF (metadata only)
+//! - **Text**: Plain text, JSON, CSV, XML, HTML, CSS, RTF, Markdown
+//! - **Documents**: PDF, DOCX, DOC, XLSX, XLS, PPTX, PPT, ODT, ODS, ODP, EPUB
+//! - **Images**: JPEG, PNG, TIFF, SVG, WebP (EXIF metadata; optional classical
+//!   OCR with the `ocr` Cargo feature plus the `OMNIPARSE_OCR=1` runtime gate)
+//! - **Audio**: MP3 (ID3v1/v2 tags)
 //! - **Archives**: ZIP, TAR
 //!
 //! See [SUPPORTED_FORMATS.md](https://github.com/omniparse/omniparse/blob/main/SUPPORTED_FORMATS.md) for complete details.
@@ -74,6 +76,8 @@
 
 pub mod core;
 pub mod detection;
+#[cfg(feature = "ocr")]
+pub mod ocr;
 pub mod parsers;
 pub mod utils;
 

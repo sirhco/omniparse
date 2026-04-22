@@ -60,7 +60,7 @@ impl MagicPattern {
     }
 }
 
-/// Detect OpenXML format by checking [Content_Types].xml
+/// Detect OpenXML format by checking `[Content_Types].xml`
 /// Returns the specific MIME type if it's an OpenXML document, None otherwise
 pub fn detect_openxml_type(data: &[u8]) -> Option<String> {
     // Check if it starts with ZIP signature
@@ -214,7 +214,8 @@ pub fn get_magic_patterns() -> Vec<MagicPattern> {
         MagicPattern::new("image/bmp", 0, b"BM".to_vec()),
         MagicPattern::new("image/webp", 8, b"WEBP".to_vec()),
         MagicPattern::new("image/x-icon", 0, vec![0x00, 0x00, 0x01, 0x00]),
-        MagicPattern::new("image/svg+xml", 0, b"<?xml".to_vec()),
+        // Require the literal <svg tag — the previous `<?xml` pattern
+        // swallowed every XML file into image/svg+xml.
         MagicPattern::new("image/svg+xml", 0, b"<svg".to_vec()),
         
         // Archive formats

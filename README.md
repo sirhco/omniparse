@@ -34,13 +34,24 @@ A Rust toolkit for detecting and extracting metadata, text, and content from hun
 - OpenDocument Presentation (ODP)
 
 ### Image Formats
-- JPEG (with EXIF metadata)
-- PNG (with metadata chunks)
-- TIFF (with tags)
+- JPEG (full EXIF via `kamadak-exif`, optional OCR)
+- PNG (text chunks including compressed zTXt/iTXt, optional OCR)
+- TIFF (EXIF via shared helper, optional OCR)
+- SVG (title, desc, viewBox, text nodes, element counts)
+- WebP (dimensions, EXIF, optional OCR)
+
+### Audio Formats
+- MP3 (ID3v1/v2 tags — title, artist, album, genre, year, track, duration)
+
+### E-book Formats
+- EPUB (OPF metadata, spine walk, chapter text)
+
+### Markup Formats
+- Markdown (plain-text extraction, heading/link/image/code-block counts)
 
 ### Archive Formats
-- ZIP
-- TAR
+- ZIP (with path-traversal detection)
+- TAR (with path-traversal detection)
 
 ## Installation
 
@@ -50,22 +61,90 @@ Add Omniparse to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-omniparse = "0.1"
+omniparse = "0.3"
 ```
 
 For async support:
 
 ```toml
 [dependencies]
-omniparse = { version = "0.1", features = ["async"] }
+omniparse = { version = "0.3", features = ["async"] }
 ```
 
 For parallel processing:
 
 ```toml
 [dependencies]
-omniparse = { version = "0.1", features = ["parallel"] }
+omniparse = { version = "0.3", features = ["parallel"] }
 ```
+
+For classical OCR on images (pure-Rust, no ML runtime, no downloaded models):
+
+```toml
+[dependencies]
+omniparse = { version = "0.3", features = ["ocr"] }
+```
+
+OCR is runtime-opt-in — set `OMNIPARSE_OCR=1` (or configure the engine
+explicitly) to activate it. See [`examples/ocr_basic.rs`](examples/ocr_basic.rs).
+
+The bundled recognizer ships with 7×9 bitmap prototypes suitable only for
+matching clean synthetic text. For real-world photos or documents, train a
+prototype set from the actual typeface using the `ocr-train` feature:
+
+```toml
+[dependencies]
+omniparse = { version = "0.3", features = ["ocr-train"] }
+```
+
+```sh
+# generate prototypes from a font at a specific pixel size
+cargo run --features ocr-train --example train_prototypes -- \
+    /path/to/Font.ttf prototypes.json 48
+
+# use them at runtime
+OMNIPARSE_OCR=1 OMNIPARSE_OCR_PROTOTYPES=prototypes.json \
+    cargo run --features ocr --release -- image.jpg
+```
+
+Tune `OMNIPARSE_OCR_MIN_CONFIDENCE=<0.0..=1.0>` to trade noise for recall
+(default `0.15`).
+
+For photographs where text is overlaid on images, switch the layout analyzer
+to the Stroke-Width Transform:
+
+```sh
+OMNIPARSE_OCR=1 OMNIPARSE_OCR_LAYOUT=swt \
+    OMNIPARSE_OCR_PROTOTYPES=prototypes.json \
+    cargo run --features ocr --release -- photo.jpg
+```
+
+Multi-scale training improves recognition across different rendered sizes:
+
+```sh
+cargo run --features ocr-train --example train_prototypes -- \
+    /path/to/Font.ttf prototypes.json 24,48,96
+```
+
+### ML OCR backend (`ocr-ml`)
+
+For photographic inputs where the classical pipeline's shape-feature
+classifier can't recover text, enable the ML backend:
+
+```toml
+[dependencies]
+omniparse = { version = "0.3", features = ["ocr-ml"] }
+```
+
+```sh
+OMNIPARSE_OCR=1 OMNIPARSE_OCR_ML=1 \
+    cargo run --features ocr-ml --release -- photo.jpg
+```
+
+Uses `ocrs` + `rten` (both pure Rust, MIT). Pre-trained detection +
+recognition models download once (~30 MB) to the user cache directory.
+Override the cache location with `OMNIPARSE_OCR_MODELS=<path>`. No models
+are bundled in the crate.
 
 ### As a CLI Tool
 

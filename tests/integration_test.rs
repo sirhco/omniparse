@@ -445,7 +445,7 @@ fn test_is_mime_supported_unsupported_types() {
     // Test unsupported types
     assert!(!is_mime_supported("application/x-unknown"));
     assert!(!is_mime_supported("video/mp4"));
-    assert!(!is_mime_supported("audio/mpeg"));
+    assert!(!is_mime_supported("audio/x-flac"));
 }
 
 #[test]
