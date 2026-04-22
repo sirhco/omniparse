@@ -58,6 +58,18 @@
 use crate::core::{ExtractionResult, Result};
 use std::collections::HashMap;
 use std::io::Read;
+use std::sync::OnceLock;
+
+static DEFAULT_REGISTRY: OnceLock<ParserRegistry> = OnceLock::new();
+
+/// Shared process-wide default parser registry.
+///
+/// Unlike `ParserRegistry::default()`, which allocates a fresh registry on every
+/// call, this returns a reference to a single lazily-initialized instance.
+/// Prefer this for read-only lookups in hot paths.
+pub fn default_registry() -> &'static ParserRegistry {
+    DEFAULT_REGISTRY.get_or_init(ParserRegistry::default)
+}
 
 /// Trait that all format-specific parsers must implement
 ///
@@ -258,7 +270,9 @@ impl Default for ParserRegistry {
         registry.register(Box::new(text::HtmlParser));
         registry.register(Box::new(text::CssParser));
         registry.register(Box::new(text::RtfParser));
-        
+        #[cfg(feature = "markdown")]
+        registry.register(Box::new(text::MarkdownParser));
+
         // Register Phase 2 document parsers
         registry.register(Box::new(document::PdfParser));
         registry.register(Box::new(document::DocxParser));
@@ -270,16 +284,26 @@ impl Default for ParserRegistry {
         registry.register(Box::new(document::XlsParser));
         registry.register(Box::new(document::DocParser));
         registry.register(Box::new(document::PptParser));
-        
+        #[cfg(feature = "epub")]
+        registry.register(Box::new(document::EpubParser));
+
         // Register Phase 3 image parsers
         registry.register(Box::new(image::JpegParser));
         registry.register(Box::new(image::PngParser));
         registry.register(Box::new(image::TiffParser));
-        
+        #[cfg(feature = "svg")]
+        registry.register(Box::new(image::SvgParser));
+        #[cfg(feature = "webp")]
+        registry.register(Box::new(image::WebpParser));
+
         // Register Phase 4 archive parsers
         registry.register(Box::new(archive::ZipParser));
         registry.register(Box::new(archive::TarParser));
-        
+
+        // Audio parsers (Phase 5)
+        #[cfg(feature = "mp3")]
+        registry.register(Box::new(audio::Mp3Parser));
+
         registry
     }
 }
@@ -288,3 +312,5 @@ pub mod text;
 pub mod document;
 pub mod image;
 pub mod archive;
+#[cfg(feature = "mp3")]
+pub mod audio;

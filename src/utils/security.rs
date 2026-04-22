@@ -5,7 +5,47 @@
 
 use crate::core::{Error, Result};
 use std::io::Cursor;
+use std::path::{Component, Path};
 use zip::ZipArchive;
+
+/// Maximum recursion depth allowed when traversing nested archives.
+///
+/// Guards against zip-within-zip bombs that inflate on recursive extraction.
+/// Listing parsers don't recurse today, but this constant anchors the future
+/// cap so it only needs one place to change.
+pub const MAX_ARCHIVE_DEPTH: usize = 8;
+
+/// Reject archive entry paths that would escape the extraction root.
+///
+/// Rejects:
+/// - Any `..` component (`../../../etc/passwd`)
+/// - Absolute paths (`/etc/passwd`)
+/// - Windows drive prefixes (`C:\...`)
+/// - Empty paths
+///
+/// Returns `true` for paths safe to extract; `false` otherwise.
+pub fn is_safe_archive_path(name: &str) -> bool {
+    if name.is_empty() {
+        return false;
+    }
+    // Canonicalize separators for the check — archives store forward slashes
+    // even on Windows, and `Path::new` parses them correctly on Unix hosts.
+    let path = Path::new(name);
+    for component in path.components() {
+        match component {
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => return false,
+            _ => {}
+        }
+    }
+    // Catch Windows drive paths on non-Windows hosts where `Component::Prefix` is never produced.
+    if name.len() >= 2 {
+        let bytes = name.as_bytes();
+        if bytes[1] == b':' && (bytes[0].is_ascii_alphabetic()) {
+            return false;
+        }
+    }
+    true
+}
 
 /// Maximum allowed decompression ratio for ZIP-based formats
 /// If uncompressed size / compressed size exceeds this, it's likely a ZIP bomb
@@ -253,6 +293,23 @@ mod tests {
         if let Err(Error::ParseError(msg)) = result {
             assert!(msg.contains("entity count"));
         }
+    }
+
+    #[test]
+    fn test_safe_archive_paths() {
+        assert!(is_safe_archive_path("docs/readme.md"));
+        assert!(is_safe_archive_path("a/b/c.txt"));
+        assert!(is_safe_archive_path("file.txt"));
+    }
+
+    #[test]
+    fn test_unsafe_archive_paths() {
+        assert!(!is_safe_archive_path(""));
+        assert!(!is_safe_archive_path("../escape"));
+        assert!(!is_safe_archive_path("a/../../b"));
+        assert!(!is_safe_archive_path("/etc/passwd"));
+        assert!(!is_safe_archive_path("C:/Windows/System32"));
+        assert!(!is_safe_archive_path("D:\\evil"));
     }
 
     #[test]

@@ -1,7 +1,8 @@
 [package]
 name = "omniparse"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
+rust-version = "1.88"
 authors = ["Chris Olson"]
 description = "A Rust toolkit for detecting and extracting metadata, text, and content from various file formats"
 license = "MIT OR Apache-2.0"
@@ -30,6 +31,14 @@ lopdf = "0.32"
 zip = "0.6"
 tar = "0.4"
 image = "0.24"
+kamadak-exif = "0.5"
+flate2 = "1.0"
+
+# Optional format-specific parsers (default on; users can turn off for
+# slimmer dependency trees via --no-default-features).
+pulldown-cmark = { version = "0.10", optional = true, default-features = false }
+epub = { version = "2.1", optional = true }
+id3 = { version = "1", optional = true }
 
 # HTML and CSS parsing
 scraper = "0.18"
@@ -42,10 +51,51 @@ calamine = "0.24"
 tokio = { version = "1.0", features = ["fs", "io-util", "macros", "rt-multi-thread"], optional = true }
 rayon = { version = "1.10", optional = true }
 
+# Classical OCR stack (optional). No ML runtime, no downloaded models —
+# everything ships in the crate.
+imageproc = { version = "0.23", optional = true }
+symspell = { version = "0.5", optional = true }
+log = { version = "0.4", optional = true }
+ab_glyph = { version = "0.2", optional = true }
+# ML OCR stack (optional). Pure Rust but pulls an ML runtime and downloads
+# pre-trained models on first use.
+ocrs = { version = "0.12", optional = true }
+rten = { version = "0.24", optional = true }
+rten-imageproc = { version = "0.24", optional = true }
+dirs = { version = "5", optional = true }
+ureq = { version = "2", features = ["tls"], optional = true }
+sha2 = { version = "0.10", optional = true }
+
 [features]
-default = []
+default = ["markdown", "svg", "webp", "epub", "mp3"]
 async = ["tokio"]
 parallel = ["rayon"]
+markdown = ["dep:pulldown-cmark"]
+svg = []       # reuses existing quick-xml
+webp = []      # reuses existing image + kamadak-exif
+epub = ["dep:epub"]
+mp3 = ["dep:id3"]
+ocr = [
+    "dep:imageproc",
+    "dep:symspell",
+    "dep:log",
+]
+# Enable parallel per-region recognition inside OCR. Implies `ocr` + `parallel`.
+ocr-parallel = ["ocr", "parallel"]
+# ML-based OCR via ocrs + rten. Pure Rust but requires downloading ~30 MB of
+# pre-trained models on first use. Implies `ocr`.
+ocr-ml = [
+    "ocr",
+    "dep:ocrs",
+    "dep:rten",
+    "dep:rten-imageproc",
+    "dep:dirs",
+    "dep:ureq",
+    "dep:sha2",
+]
+# Extra capability: train new glyph prototypes from a TrueType/OpenType font.
+# Pulls `ab_glyph` (pure-Rust font rasterizer). Implies `ocr`.
+ocr-train = ["ocr", "dep:ab_glyph"]
 
 [dev-dependencies]
 futures = "0.3"

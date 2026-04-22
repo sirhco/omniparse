@@ -2,6 +2,7 @@
 
 use crate::core::{Content, Error, ExtractionResult, Metadata, MetadataValue, Result};
 use crate::parsers::Parser;
+use crate::utils::security::is_safe_archive_path;
 use chrono::{DateTime, TimeZone, Utc};
 use std::io::Cursor;
 use tar::Archive;
@@ -60,19 +61,16 @@ impl Parser for TarParser {
     }
     
     fn parse(&self, data: &[u8], mime_type: &str) -> Result<ExtractionResult> {
-        // Extract file information
         let file_infos = Self::extract_file_info(data)?;
         let file_count = file_infos.len();
-        
-        // Calculate total size
+
         let total_size: u64 = file_infos.iter().map(|f| f.size).sum();
-        
-        // Create file list for content
+        let contains_unsafe_paths = file_infos.iter().any(|f| !is_safe_archive_path(&f.path));
+
         let file_list: Vec<String> = file_infos.iter()
             .map(|f| format!("{} ({} bytes)", f.path, f.size))
             .collect();
-        
-        // Create text content with file listing
+
         let content_text = if file_list.is_empty() {
             "Empty TAR archive".to_string()
         } else {
@@ -82,11 +80,14 @@ impl Parser for TarParser {
                 file_list.join("\n")
             )
         };
-        
-        // Build metadata
+
         let mut metadata = Metadata::new();
         metadata.insert("file_count".to_string(), MetadataValue::Number(file_count as i64));
         metadata.insert("total_size".to_string(), MetadataValue::Number(total_size as i64));
+        metadata.insert(
+            "contains_unsafe_paths".to_string(),
+            MetadataValue::Boolean(contains_unsafe_paths),
+        );
         
         // Add file list with details
         let file_details: Vec<MetadataValue> = file_infos.iter()

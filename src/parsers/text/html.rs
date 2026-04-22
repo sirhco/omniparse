@@ -11,20 +11,17 @@ pub struct HtmlParser;
 impl HtmlParser {
     /// Extract visible text from HTML, excluding script and style tags
     fn extract_text(document: &Html) -> String {
-        let body_selector = Selector::parse("body").unwrap();
-        
-        // Get the body element, or use the whole document if no body
-        let body_element = document.select(&body_selector).next();
-        
-        // Pre-allocate vector with estimated capacity
         let mut text_parts = Vec::with_capacity(64);
-        
-        if let Some(body) = body_element {
-            // Recursively extract text, skipping script and style elements
-            Self::extract_text_from_element(body, &mut text_parts);
-        } else {
-            // No body tag, try to extract from root
-            let root_selector = Selector::parse("*").unwrap();
+
+        if let Ok(body_selector) = Selector::parse("body") {
+            if let Some(body) = document.select(&body_selector).next() {
+                Self::extract_text_from_element(body, &mut text_parts);
+                return text_parts.join("\n");
+            }
+        }
+
+        // Fallback: no <body> or selector parse failed — walk the root.
+        if let Ok(root_selector) = Selector::parse("*") {
             for element in document.select(&root_selector) {
                 let tag_name = element.value().name();
                 if tag_name != "script" && tag_name != "style" && tag_name != "head" {
@@ -37,8 +34,7 @@ impl HtmlParser {
                 }
             }
         }
-        
-        // Join with newlines to preserve paragraph boundaries
+
         text_parts.join("\n")
     }
     
@@ -68,7 +64,7 @@ impl HtmlParser {
     /// Extract metadata from HTML document
     fn extract_metadata(document: &Html) -> Metadata {
         let mut metadata = Metadata::new();
-        
+
         // Extract title
         if let Ok(title_selector) = Selector::parse("title") {
             if let Some(title_element) = document.select(&title_selector).next() {
@@ -78,36 +74,84 @@ impl HtmlParser {
                 }
             }
         }
-        
-        // Extract meta tags
+
+        // Extract meta tags (name=*, property=*, http-equiv=*, charset)
         if let Ok(meta_selector) = Selector::parse("meta") {
             for meta in document.select(&meta_selector) {
                 let element = meta.value();
-                
-                // Extract description
+
                 if let Some(name) = element.attr("name") {
-                    if name.eq_ignore_ascii_case("description") {
-                        if let Some(content) = element.attr("content") {
-                            metadata.insert("description".to_string(), MetadataValue::Text(content.to_string()));
-                        }
-                    } else if name.eq_ignore_ascii_case("author") {
-                        if let Some(content) = element.attr("content") {
-                            metadata.insert("author".to_string(), MetadataValue::Text(content.to_string()));
-                        }
-                    } else if name.eq_ignore_ascii_case("keywords") {
-                        if let Some(content) = element.attr("content") {
-                            metadata.insert("keywords".to_string(), MetadataValue::Text(content.to_string()));
+                    let lname = name.to_ascii_lowercase();
+                    if let Some(content) = element.attr("content") {
+                        match lname.as_str() {
+                            "description" => {
+                                metadata.insert("description".to_string(), MetadataValue::Text(content.to_string()));
+                            }
+                            "author" => {
+                                metadata.insert("author".to_string(), MetadataValue::Text(content.to_string()));
+                            }
+                            "keywords" => {
+                                metadata.insert("keywords".to_string(), MetadataValue::Text(content.to_string()));
+                            }
+                            "viewport" => {
+                                metadata.insert("viewport".to_string(), MetadataValue::Text(content.to_string()));
+                            }
+                            "robots" => {
+                                metadata.insert("robots".to_string(), MetadataValue::Text(content.to_string()));
+                            }
+                            tw if tw.starts_with("twitter:") => {
+                                metadata.insert(lname.replace(':', "_"), MetadataValue::Text(content.to_string()));
+                            }
+                            _ => {}
                         }
                     }
                 }
-                
-                // Extract charset
+
+                // OpenGraph uses property=
+                if let Some(property) = element.attr("property") {
+                    if property.to_ascii_lowercase().starts_with("og:") {
+                        if let Some(content) = element.attr("content") {
+                            let key = property.to_ascii_lowercase().replace(':', "_");
+                            metadata.insert(key, MetadataValue::Text(content.to_string()));
+                        }
+                    }
+                }
+
+                // http-equiv (e.g. content-language)
+                if let Some(http_equiv) = element.attr("http-equiv") {
+                    if let Some(content) = element.attr("content") {
+                        let key = format!("http_equiv_{}", http_equiv.to_ascii_lowercase());
+                        metadata.insert(key, MetadataValue::Text(content.to_string()));
+                    }
+                }
+
+                // Direct charset attribute (HTML5)
                 if let Some(charset) = element.attr("charset") {
                     metadata.insert("charset".to_string(), MetadataValue::Text(charset.to_string()));
                 }
             }
         }
-        
+
+        // Canonical URL
+        if let Ok(link_selector) = Selector::parse("link[rel=\"canonical\"]") {
+            if let Some(link) = document.select(&link_selector).next() {
+                if let Some(href) = link.value().attr("href") {
+                    metadata.insert("canonical_url".to_string(), MetadataValue::Text(href.to_string()));
+                }
+            }
+        }
+
+        // Heading hierarchy counts
+        for level in 1..=6u8 {
+            let sel = format!("h{level}");
+            if let Ok(heading_selector) = Selector::parse(&sel) {
+                let count = document.select(&heading_selector).count();
+                if count > 0 {
+                    metadata.insert(format!("heading_{}_count", sel), MetadataValue::Number(count as i64));
+                }
+            }
+        }
+
         // Extract language from html tag
         if let Ok(html_selector) = Selector::parse("html") {
             if let Some(html_element) = document.select(&html_selector).next() {
@@ -116,7 +160,7 @@ impl HtmlParser {
                 }
             }
         }
-        
+
         metadata
     }
 }

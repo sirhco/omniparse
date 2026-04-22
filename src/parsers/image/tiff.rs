@@ -1,7 +1,9 @@
 //! TIFF image parser
 
-use crate::core::{Content, Error, ExtractionResult, Metadata, MetadataValue, Result};
+use crate::core::{Error, ExtractionResult, Metadata, MetadataValue, Result};
 use crate::parsers::Parser;
+use crate::parsers::image::exif::extract_exif_fields;
+use crate::parsers::image::maybe_ocr_content;
 use image::io::Reader as ImageReader;
 use std::io::Cursor;
 
@@ -39,10 +41,17 @@ impl Parser for TiffParser {
                 metadata.insert(key, value);
             }
         }
-        
+
+        // TIFF IFD layout is identical to EXIF; reuse the shared helper for real values.
+        for (key, value) in extract_exif_fields(data) {
+            metadata.insert(key, value);
+        }
+
+        let content = maybe_ocr_content(data, &mut metadata);
+
         Ok(ExtractionResult {
             mime_type: mime_type.to_string(),
-            content: Content::None,
+            content,
             metadata,
             detection_confidence: 0.0,
         })
@@ -107,11 +116,8 @@ impl TiffParser {
             ));
         }
         
-        // Extract common TIFF tags from first IFD
-        if let Ok(ifd_tags) = Self::read_ifd_tags(data, ifd_offset, is_little_endian) {
-            tags.extend(ifd_tags);
-        }
-        
+        let _ = ifd_offset; // structural-only walk; real IFD tag values come from extract_exif_fields
+
         Ok(tags)
     }
     
@@ -157,66 +163,4 @@ impl TiffParser {
         count
     }
     
-    /// Read tags from an IFD
-    fn read_ifd_tags(data: &[u8], ifd_offset: usize, is_little_endian: bool) -> Result<Vec<(String, MetadataValue)>> {
-        let mut tags = Vec::new();
-        
-        if ifd_offset + 2 > data.len() {
-            return Ok(tags);
-        }
-        
-        // Read number of entries
-        let num_entries = if is_little_endian {
-            u16::from_le_bytes([data[ifd_offset], data[ifd_offset + 1]])
-        } else {
-            u16::from_be_bytes([data[ifd_offset], data[ifd_offset + 1]])
-        } as usize;
-        
-        // Read each entry (12 bytes each)
-        for i in 0..num_entries {
-            let entry_offset = ifd_offset + 2 + (i * 12);
-            
-            if entry_offset + 12 > data.len() {
-                break;
-            }
-            
-            // Read tag ID
-            let tag_id = if is_little_endian {
-                u16::from_le_bytes([data[entry_offset], data[entry_offset + 1]])
-            } else {
-                u16::from_be_bytes([data[entry_offset], data[entry_offset + 1]])
-            };
-            
-            // Map common tag IDs to names
-            let tag_name = match tag_id {
-                256 => "ImageWidth",
-                257 => "ImageLength",
-                258 => "BitsPerSample",
-                259 => "Compression",
-                262 => "PhotometricInterpretation",
-                270 => "ImageDescription",
-                271 => "Make",
-                272 => "Model",
-                273 => "StripOffsets",
-                274 => "Orientation",
-                277 => "SamplesPerPixel",
-                278 => "RowsPerStrip",
-                282 => "XResolution",
-                283 => "YResolution",
-                284 => "PlanarConfiguration",
-                296 => "ResolutionUnit",
-                305 => "Software",
-                306 => "DateTime",
-                315 => "Artist",
-                _ => continue, // Skip unknown tags
-            };
-            
-            tags.push((
-                format!("tiff_{}", tag_name),
-                MetadataValue::Text(format!("tag_{}", tag_id)),
-            ));
-        }
-        
-        Ok(tags)
-    }
 }

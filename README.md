@@ -5,13 +5,15 @@ A Rust toolkit for detecting and extracting metadata, text, and content from hun
 ## Features
 
 - **Automatic Type Detection**: Identifies file types using magic bytes, content analysis, and extension fallback
-- **Multiple Format Support**: Extracts content from text, document, image, and archive formats
-- **Rich Metadata Extraction**: Retrieves format-specific metadata including title, author, dates, and more
+- **Multiple Format Support**: Extracts content from 25+ formats across text, document, image, audio, and archive categories
+- **Rich Metadata Extraction**: Full EXIF for JPEG/TIFF, OpenGraph / Twitter / canonical for HTML, ID3 for MP3, OPF for EPUB, version/encryption/forms/annotations for PDF, and more
+- **OCR Subsystem (v0.3)**: Optional classical and ML OCR pipelines for images and scanned PDFs. Pure Rust. Models download on first use for the ML backend; classical backend has no external dependencies.
 - **Dual Interface**: Use as a CLI tool or integrate as a library in your Rust applications
 - **Pure Rust Implementation**: Minimal dependencies, no external system libraries required
 - **Async Support**: Optional async API for non-blocking operations
 - **Parallel Processing**: Batch process multiple files in parallel for better performance
 - **Streaming Support**: Memory-efficient processing of large files
+- **Security Hardening**: ZIP-bomb detection, XML entity limits, archive path-traversal detection, strict prototype validation
 
 ## Supported Formats
 
@@ -20,9 +22,10 @@ A Rust toolkit for detecting and extracting metadata, text, and content from hun
 - JSON
 - CSV/TSV
 - XML
-- HTML
+- HTML (OpenGraph, Twitter Card, canonical URL, viewport, heading counts)
 - CSS
 - RTF (Rich Text Format)
+- Markdown (via `pulldown-cmark`, optional `markdown` feature, default on)
 
 ### Document Formats
 - PDF
@@ -33,14 +36,22 @@ A Rust toolkit for detecting and extracting metadata, text, and content from hun
 - OpenDocument Spreadsheet (ODS)
 - OpenDocument Presentation (ODP)
 
+### Document Formats (added)
+- EPUB (OPF metadata, spine walk, chapter text — optional `epub` feature)
+
 ### Image Formats
-- JPEG (with EXIF metadata)
-- PNG (with metadata chunks)
-- TIFF (with tags)
+- JPEG (full EXIF via `kamadak-exif`, optional OCR)
+- PNG (text chunks including decompressed zTXt/iTXt, optional OCR)
+- TIFF (EXIF via shared helper, optional OCR)
+- SVG (title, desc, viewBox, text nodes, element counts — optional `svg` feature)
+- WebP (dimensions, EXIF, optional OCR — optional `webp` feature)
+
+### Audio Formats
+- MP3 (ID3v1/v2 tags — title, artist, album, genre, year, track, duration — optional `mp3` feature)
 
 ### Archive Formats
-- ZIP
-- TAR
+- ZIP (with path-traversal detection via `contains_unsafe_paths` metadata)
+- TAR (with path-traversal detection)
 
 ## Installation
 
@@ -50,22 +61,96 @@ Add Omniparse to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-omniparse = "0.1"
+omniparse = "0.3"
 ```
 
 For async support:
 
 ```toml
 [dependencies]
-omniparse = { version = "0.1", features = ["async"] }
+omniparse = { version = "0.3", features = ["async"] }
 ```
 
 For parallel processing:
 
 ```toml
 [dependencies]
-omniparse = { version = "0.1", features = ["parallel"] }
+omniparse = { version = "0.3", features = ["parallel"] }
 ```
+
+### Two OCR backends
+
+v0.3 ships two optional OCR backends. Pick one based on your inputs.
+
+📖 **[Full OCR Guide →](OCR_GUIDE.md)** — training, tuning, debugging, API examples.
+
+**Classical** — pure-algorithm pipeline. No ML runtime, no downloads.
+
+```toml
+[dependencies]
+omniparse = { version = "0.3", features = ["ocr"] }
+```
+
+OCR is runtime-opt-in — set `OMNIPARSE_OCR=1` (or configure the engine
+explicitly) to activate it. See [`examples/ocr_basic.rs`](examples/ocr_basic.rs).
+
+The bundled recognizer ships with 7×9 bitmap prototypes suitable only for
+matching clean synthetic text. For real-world photos or documents, train a
+prototype set from the actual typeface using the `ocr-train` feature:
+
+```toml
+[dependencies]
+omniparse = { version = "0.3", features = ["ocr-train"] }
+```
+
+```sh
+# generate prototypes from a font at a specific pixel size
+cargo run --features ocr-train --example train_prototypes -- \
+    /path/to/Font.ttf prototypes.json 48
+
+# use them at runtime
+OMNIPARSE_OCR=1 OMNIPARSE_OCR_PROTOTYPES=prototypes.json \
+    cargo run --features ocr --release -- image.jpg
+```
+
+Tune `OMNIPARSE_OCR_MIN_CONFIDENCE=<0.0..=1.0>` to trade noise for recall
+(default `0.15`).
+
+For photographs where text is overlaid on images, switch the layout analyzer
+to the Stroke-Width Transform:
+
+```sh
+OMNIPARSE_OCR=1 OMNIPARSE_OCR_LAYOUT=swt \
+    OMNIPARSE_OCR_PROTOTYPES=prototypes.json \
+    cargo run --features ocr --release -- photo.jpg
+```
+
+Multi-scale training improves recognition across different rendered sizes:
+
+```sh
+cargo run --features ocr-train --example train_prototypes -- \
+    /path/to/Font.ttf prototypes.json 24,48,96
+```
+
+### ML OCR backend (`ocr-ml`)
+
+For photographic inputs where the classical pipeline's shape-feature
+classifier can't recover text, enable the ML backend:
+
+```toml
+[dependencies]
+omniparse = { version = "0.3", features = ["ocr-ml"] }
+```
+
+```sh
+OMNIPARSE_OCR=1 OMNIPARSE_OCR_ML=1 \
+    cargo run --features ocr-ml --release -- photo.jpg
+```
+
+Uses `ocrs` + `rten` (both pure Rust, MIT). Pre-trained detection +
+recognition models download once (~30 MB) to the user cache directory.
+Override the cache location with `OMNIPARSE_OCR_MODELS=<path>`. No models
+are bundled in the crate.
 
 ### As a CLI Tool
 
@@ -396,11 +481,23 @@ Omniparse follows a modular architecture:
 
 ## Documentation
 
-- **[SUPPORTED_FORMATS.md](SUPPORTED_FORMATS.md)** - Complete list of supported formats with detailed information
-- **[CLI_NEW_FORMATS_GUIDE.md](CLI_NEW_FORMATS_GUIDE.md)** - Comprehensive CLI guide for all newly added formats
-- **[MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)** - Guide for upgrading to the latest version with new format support
-- **[examples/](examples/)** - Working code examples for all formats
-- **API Documentation** - Run `cargo doc --open` for detailed API docs
+### Version 0.3 (current)
+
+- **[RELEASE_NOTES_v0.3.0.md](RELEASE_NOTES_v0.3.0.md)** - Complete list of v0.3.0 enhancements, feature flags, env var reference
+- **[MIGRATION_v0.3.0.md](MIGRATION_v0.3.0.md)** - Upgrade guide from v0.2.x with breaking change details
+- **[OCR_GUIDE.md](OCR_GUIDE.md)** - Full OCR subsystem guide: classical vs ML, training, tuning, debugging
+- **[CHANGELOG.md](CHANGELOG.md)** - Full changelog
+
+### General
+
+- **[SUPPORTED_FORMATS.md](SUPPORTED_FORMATS.md)** - Complete list of supported formats
+- **[examples/](examples/)** - Working code examples for all formats and OCR modes
+- **API Documentation** - Run `cargo doc --open --features "ocr-ml ocr-train"` for full API docs
+
+### Historical
+
+- **[CLI_NEW_FORMATS_GUIDE.md](CLI_NEW_FORMATS_GUIDE.md)** - v0.2 CLI guide for initially-added formats
+- **[MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)** - v0.2 migration guide
 
 ## Contributing
 

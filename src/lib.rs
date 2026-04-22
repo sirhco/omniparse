@@ -1,19 +1,39 @@
-//! Omniparse - A Rust toolkit for detecting and extracting metadata, text, and content from 35+ file formats
+//! # Omniparse — Rust content extraction toolkit
 //!
-//! This library provides both synchronous and asynchronous APIs for content extraction.
+//! Apache-Tika-style detection and extraction for 25+ file formats. Pure
+//! Rust, no system libraries, optional async / parallel / OCR.
 //!
-//! # Supported Formats
+//! ## Supported formats
 //!
-//! - **Text**: Plain text, JSON, CSV, XML, HTML, CSS, RTF
-//! - **Documents**: PDF, DOCX, DOC, XLSX, XLS, PPTX, PPT, ODT, ODS, ODP
-//! - **Images**: JPEG, PNG, TIFF (metadata only)
-//! - **Archives**: ZIP, TAR
+//! - **Text**: Plain text, JSON, CSV/TSV, XML, HTML (OpenGraph, Twitter,
+//!   canonical URL, heading counts), CSS, RTF, Markdown
+//! - **Documents**: PDF (version, encryption, form-field / annotation /
+//!   attachment counts), DOCX, DOC, XLSX, XLS, PPTX, PPT, ODT, ODS, ODP,
+//!   EPUB
+//! - **Images**: JPEG (full EXIF), PNG (decompressed zTXt/iTXt), TIFF,
+//!   SVG, WebP. Optional OCR routes image text to `Content::Text`.
+//! - **Audio**: MP3 (ID3v1/v2)
+//! - **Archives**: ZIP, TAR (with path-traversal detection)
 //!
-//! See [SUPPORTED_FORMATS.md](https://github.com/omniparse/omniparse/blob/main/SUPPORTED_FORMATS.md) for complete details.
+//! See [`SUPPORTED_FORMATS.md`] for per-format metadata keys.
 //!
-//! # Examples
+//! ## Cargo features
 //!
-//! ## Basic extraction from a file
+//! | Feature         | Default | Purpose                               |
+//! | --------------- | ------- | ------------------------------------- |
+//! | `async`         | off     | Tokio-based async extraction          |
+//! | `parallel`      | off     | Rayon-based batch processing          |
+//! | `markdown`      | **on**  | Markdown parser                       |
+//! | `svg`           | **on**  | SVG parser                            |
+//! | `webp`          | **on**  | WebP parser                           |
+//! | `epub`          | **on**  | EPUB parser                           |
+//! | `mp3`           | **on**  | MP3 parser                            |
+//! | `ocr`           | off     | Classical OCR pipeline                |
+//! | `ocr-train`     | off     | TTF → prototype trainer               |
+//! | `ocr-parallel`  | off     | Parallel per-region recognition       |
+//! | `ocr-ml`        | off     | ML OCR backend (ocrs + rten)          |
+//!
+//! ## Quickstart
 //!
 //! ```no_run
 //! use omniparse::extract_from_path;
@@ -32,6 +52,10 @@
 //! let result = extract_from_path("webpage.html")?;
 //! if let Some(title) = result.metadata.get("title") {
 //!     println!("Page title: {:?}", title);
+//! }
+//! // v0.3: OpenGraph, Twitter, canonical URL, heading counts also available.
+//! if let Some(og_title) = result.metadata.get("og_title") {
+//!     println!("og:title = {:?}", og_title);
 //! }
 //! # Ok::<(), omniparse::Error>(())
 //! ```
@@ -71,9 +95,61 @@
 //!     println!("PDF is supported!");
 //! }
 //! ```
+//!
+//! ## OCR (v0.3)
+//!
+//! OCR is runtime-opt-in via `OMNIPARSE_OCR=1` plus the `ocr` or `ocr-ml`
+//! Cargo feature. Image parsers automatically route through OCR when the
+//! gate is set and populate `ocr_status` / `ocr_confidence` / `ocr_applied`
+//! metadata.
+//!
+//! ```no_run
+//! # #[cfg(feature = "ocr")] {
+//! // OMNIPARSE_OCR=1 in the environment activates OCR for image parsers.
+//! let result = omniparse::extract_from_path("photo.jpg")?;
+//! if let Some(status) = result.metadata.get("ocr_status") {
+//!     println!("ocr_status = {status:?}");
+//! }
+//! # }
+//! # Ok::<(), omniparse::Error>(())
+//! ```
+//!
+//! Direct library use of the classical engine:
+//!
+//! ```no_run
+//! # #[cfg(feature = "ocr")] {
+//! use omniparse::ocr::OcrEngine;
+//! let engine = OcrEngine::new();
+//! let image = image::open("page.png").unwrap();
+//! let output = engine.recognize(image)?;
+//! println!("{}", output.text);
+//! # }
+//! # Ok::<(), omniparse::Error>(())
+//! ```
+//!
+//! ML backend (requires `ocr-ml` feature, pre-trained models download on
+//! first use):
+//!
+//! ```no_run
+//! # #[cfg(feature = "ocr-ml")] {
+//! let engine = omniparse::ocr::ml::MlOcrEngine::new()?;
+//! let image = image::open("photo.jpg").unwrap();
+//! let output = engine.recognize(image)?;
+//! println!("{}", output.text);
+//! # }
+//! # Ok::<(), omniparse::Error>(())
+//! ```
+//!
+//! See [`OCR_GUIDE.md`] for training, tuning, debugging, and the full env
+//! var reference.
+//!
+//! [`SUPPORTED_FORMATS.md`]: https://github.com/sirhco/omniparse/blob/main/SUPPORTED_FORMATS.md
+//! [`OCR_GUIDE.md`]: https://github.com/sirhco/omniparse/blob/main/OCR_GUIDE.md
 
 pub mod core;
 pub mod detection;
+#[cfg(feature = "ocr")]
+pub mod ocr;
 pub mod parsers;
 pub mod utils;
 
@@ -190,8 +266,7 @@ pub fn extract_from_bytes(data: &[u8], mime_hint: Option<&str>) -> Result<Extrac
 /// }
 /// ```
 pub fn supported_mime_types() -> Vec<String> {
-    let registry = parsers::ParserRegistry::default();
-    registry.supported_types()
+    parsers::default_registry().supported_types()
 }
 
 /// Check if a specific MIME type is supported.
@@ -221,8 +296,7 @@ pub fn supported_mime_types() -> Vec<String> {
 /// }
 /// ```
 pub fn is_mime_supported(mime_type: &str) -> bool {
-    let registry = parsers::ParserRegistry::default();
-    registry.get_parser(mime_type).is_some()
+    parsers::default_registry().get_parser(mime_type).is_some()
 }
 
 /// Extract text and metadata from a file asynchronously.

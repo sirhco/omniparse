@@ -1,9 +1,11 @@
 //! PNG image parser
 
-use crate::core::{Content, Error, ExtractionResult, Metadata, MetadataValue, Result};
+use crate::core::{Error, ExtractionResult, Metadata, MetadataValue, Result};
 use crate::parsers::Parser;
+use crate::parsers::image::maybe_ocr_content;
+use flate2::read::ZlibDecoder;
 use image::io::Reader as ImageReader;
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 
 /// Parser for PNG images
 pub struct PngParser;
@@ -39,10 +41,12 @@ impl Parser for PngParser {
                 metadata.insert(key, value);
             }
         }
-        
+
+        let content = maybe_ocr_content(data, &mut metadata);
+
         Ok(ExtractionResult {
             mime_type: mime_type.to_string(),
-            content: Content::None,
+            content,
             metadata,
             detection_confidence: 0.0,
         })
@@ -124,40 +128,55 @@ impl PngParser {
     fn parse_itext_chunk(data: &[u8]) -> Option<(String, String)> {
         // Find null separator for keyword
         let null_pos = data.iter().position(|&b| b == 0)?;
-        
         let keyword = String::from_utf8_lossy(&data[..null_pos]).to_string();
-        
-        // Skip compression flag and compression method
+
+        // Compression flag (1 byte), compression method (1 byte)
         if null_pos + 2 >= data.len() {
             return None;
         }
-        
+        let compression_flag = data[null_pos + 1];
+
         // Find next null (language tag)
-        let lang_start = null_pos + 2;
+        let lang_start = null_pos + 3;
+        if lang_start >= data.len() {
+            return None;
+        }
         let lang_end = data[lang_start..].iter().position(|&b| b == 0)? + lang_start;
-        
+
         // Find next null (translated keyword)
         let trans_start = lang_end + 1;
-        let trans_end = data[trans_start..].iter().position(|&b| b == 0).map(|p| p + trans_start);
-        
-        let text_start = trans_end.map(|p| p + 1).unwrap_or(trans_start);
-        if text_start < data.len() {
-            let text = String::from_utf8_lossy(&data[text_start..]).to_string();
-            Some((keyword, text))
-        } else {
-            None
+        if trans_start >= data.len() {
+            return None;
         }
+        let trans_end = data[trans_start..].iter().position(|&b| b == 0).map(|p| p + trans_start)?;
+
+        let text_bytes = &data[trans_end + 1..];
+        let text = if compression_flag == 1 {
+            inflate_zlib(text_bytes)?
+        } else {
+            String::from_utf8_lossy(text_bytes).to_string()
+        };
+        Some((keyword, text))
     }
-    
-    /// Parse zTXt chunk (compressed text)
+
+    /// Parse zTXt chunk (zlib-compressed Latin-1 text)
     fn parse_ztext_chunk(data: &[u8]) -> Option<(String, String)> {
-        // Find null separator for keyword
         let null_pos = data.iter().position(|&b| b == 0)?;
-        
         let keyword = String::from_utf8_lossy(&data[..null_pos]).to_string();
-        
-        // For simplicity, we'll note that the text is compressed
-        // Full implementation would decompress using zlib
-        Some((keyword, "[compressed text]".to_string()))
+
+        // Byte after keyword+null = compression method (only 0 = zlib deflate is defined).
+        if null_pos + 1 >= data.len() {
+            return None;
+        }
+        let compressed = &data[null_pos + 2..];
+        let text = inflate_zlib(compressed)?;
+        Some((keyword, text))
     }
+}
+
+fn inflate_zlib(bytes: &[u8]) -> Option<String> {
+    let mut decoder = ZlibDecoder::new(bytes);
+    let mut out = Vec::with_capacity(bytes.len() * 2);
+    decoder.read_to_end(&mut out).ok()?;
+    Some(String::from_utf8_lossy(&out).to_string())
 }
