@@ -22,7 +22,7 @@ use crate::core::{Content, Metadata};
 use crate::core::MetadataValue;
 
 /// Run OCR on raw image bytes when the `ocr` feature is enabled and the
-/// `OMNIPARSE_OCR=1` runtime gate is set. Populates structured metadata:
+/// `OMNIPARSE_OCR=classical|ml` runtime gate is set. Populates structured metadata:
 ///
 /// - `ocr_status`: one of `disabled`, `no_text_found`, `error`, `recognized`.
 /// - `ocr_applied`: `true` only when text was recognized.

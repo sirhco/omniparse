@@ -100,16 +100,12 @@ cargo run --example legacy_office_extraction
 
 ### Web Service Examples
 
-#### 11. Web Service (`web_service.rs`)
+#### 11. Web Service — minimal demo (`web_service.rs`)
 
-A complete REST API built with Axum that accepts file uploads and uses Omniparse to extract content and metadata.
-
-**Features:**
-- File upload via multipart/form-data
-- Multiple endpoints (parse, detect, health)
-- JSON responses
-- Error handling
-- Query parameters
+A minimal Axum REST API for learning the shape of an omniparse-backed
+service. Multipart upload, parse / detect / health endpoints, JSON
+responses. Listens on `127.0.0.1:3000` by default; override with
+`OMNIPARSE_BIND=0.0.0.0:3000`.
 
 **Run:**
 ```bash
@@ -122,6 +118,37 @@ cd examples && make server
 ```bash
 curl -X POST -F "file=@test_data/text/sample.json" http://localhost:3000/parse
 ```
+
+#### 11b. Web Service — production (`web_service_prod.rs`)
+
+Production-grade Axum example targeting Google Cloud Run. The published
+Docker image uses this binary as its `ENTRYPOINT` (listens on `$PORT`,
+default 8080).
+
+**Adds over the minimal demo:**
+- Cloud Logging-compatible JSON stdout, `X-Cloud-Trace-Context`
+  propagation, Prometheus `/metrics`, `/live` + `/ready` probes
+  (ready re-verifies model SHA-256 with a 60 s cache)
+- Body-size limit, request timeout, concurrency cap, panic catcher
+- CPU-bound parses run on `tokio::task::spawn_blocking`
+- Model pre-warm at startup, graceful shutdown (8 s drain)
+- IAM-first auth (Cloud Run `--no-allow-unauthenticated`) with bearer
+  fallback (`OMNIPARSE_AUTH_TOKEN`) for non-Google deployments
+- `--healthcheck` mode so the binary itself serves as the Docker
+  `HEALTHCHECK` command on distroless
+
+**Run:**
+```bash
+cargo run --features ocr-ml --example web_service_prod
+curl -sf http://localhost:8080/ready
+```
+
+**Deploy to Cloud Run:**
+```bash
+bash deploy/cloud-run/deploy.sh <gcp-project> <region> <caller-sa-email>
+```
+
+See `examples/WEB_SERVICE_GUIDE.md` → "Production example (Cloud Run)".
 
 #### 12. Web Client (`web_client.rs`)
 

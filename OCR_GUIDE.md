@@ -1,20 +1,56 @@
 # Omniparse OCR Guide
 
-Comprehensive guide to the OCR subsystem introduced in v0.3.0.
+Single canonical reference for the OCR subsystem. The README points here.
+
+## 30-second start
+
+ML backend (recommended for photos, screenshots, unknown typography):
+
+```sh
+cargo install omniparse --features ocr-ml
+omniparse models download                 # one-time, ~12 MB to cache
+OMNIPARSE_OCR=ml omniparse photo.jpg      # text appears in stdout
+```
+
+Classical backend (pure-Rust, no downloads, fast — but only good on clean
+printed scans with a matched font):
+
+```sh
+cargo install omniparse --features ocr
+OMNIPARSE_OCR=classical omniparse scan.png
+```
+
+That's it. Skip to [PDF OCR](#pdf-ocr) for scanned-PDF specifics, or read on
+for the backend-chooser table and tuning knobs.
 
 ## Contents
 
-1. [When to enable OCR](#when-to-enable-ocr)
+1. [The OMNIPARSE_OCR env var](#the-omniparse_ocr-env-var)
 2. [Classical vs ML backend](#classical-vs-ml-backend)
-3. [Quickstart: ML backend](#quickstart-ml-backend)
-4. [Quickstart: classical backend](#quickstart-classical-backend)
-5. [Training custom prototypes](#training-custom-prototypes)
-6. [Validating the pipeline](#validating-the-pipeline)
-7. [Tuning the classical pipeline](#tuning-the-classical-pipeline)
-8. [Debugging OCR output](#debugging-ocr-output)
-9. [PDF OCR](#pdf-ocr)
-10. [Library API](#library-api)
-11. [FAQ](#faq)
+3. [Managing the model cache](#managing-the-model-cache)
+4. [Quickstart: ML backend](#quickstart-ml-backend)
+5. [Quickstart: classical backend](#quickstart-classical-backend)
+6. [Training custom prototypes](#training-custom-prototypes)
+7. [Validating the pipeline](#validating-the-pipeline)
+8. [Tuning the classical pipeline](#tuning-the-classical-pipeline)
+9. [Debugging OCR output](#debugging-ocr-output)
+10. [PDF OCR](#pdf-ocr)
+11. [Library API](#library-api)
+12. [FAQ](#faq)
+
+## The OMNIPARSE_OCR env var
+
+A single switch controls which backend runs:
+
+| Value           | Effect                                                  |
+| --------------- | ------------------------------------------------------- |
+| unset / `off`   | OCR disabled (image parsers extract EXIF only)          |
+| `classical`     | Pure-Rust classical pipeline (requires `ocr` feature)   |
+| `ml`            | ocrs + rten ML backend (requires `ocr-ml` feature)      |
+
+> The previous two-variable scheme (`OMNIPARSE_OCR=1` plus
+> `OMNIPARSE_OCR_ML=1`) still works but prints a one-shot deprecation
+> warning. It will be removed in 0.5.
 
 ## When to enable OCR
 
@@ -53,44 +89,73 @@ network download.
 real applications, or anything with unknown typography — and you can accept
 a one-time model download.
 
+## Managing the model cache
+
+The CLI ships dedicated subcommands for the ML model cache. They're useful
+for pre-fetching in CI, baking models into a container image, debugging
+"why isn't OCR working", and air-gapped installs.
+
+```sh
+omniparse models path        # print cache directory
+omniparse models download    # fetch any missing models (~12 MB)
+omniparse models list        # show name / size / sha256 / status per model
+omniparse models verify      # re-hash cached files; exit 0 only if all match
+```
+
+All four commands require the `ocr-ml` feature; without it they exit with
+a clear error message.
+
+Override the cache directory with the `OMNIPARSE_OCR_MODELS` env var:
+
+```sh
+OMNIPARSE_OCR_MODELS=/opt/omniparse/models omniparse models download
+```
+
+Useful for shared installs or air-gapped environments where you want to
+pre-populate the cache manually, or for Docker images that bake models
+into a known path (see the project `Dockerfile`).
+
+Programmatic equivalents live on [`omniparse::ocr::ml`]:
+[`prefetch_all`][prefetch_all], [`verify_all`][verify_all],
+[`list_models`][list_models], [`model_dir`][model_dir].
+
+[prefetch_all]: https://docs.rs/omniparse/latest/omniparse/ocr/ml/fn.prefetch_all.html
+[verify_all]: https://docs.rs/omniparse/latest/omniparse/ocr/ml/fn.verify_all.html
+[list_models]: https://docs.rs/omniparse/latest/omniparse/ocr/ml/fn.list_models.html
+[model_dir]: https://docs.rs/omniparse/latest/omniparse/ocr/ml/fn.model_dir.html
+
 ## Quickstart: ML backend
 
 ### Install
 
 ```toml
 [dependencies]
-omniparse = { version = "0.3", features = ["ocr-ml"] }
+omniparse = { version = "0.4", features = ["ocr-ml"] }
 ```
 
 ### Command line
 
 ```sh
-OMNIPARSE_OCR=1 OMNIPARSE_OCR_ML=1 \
-    cargo run --features ocr-ml --release -- photo.jpg
+# One-time setup
+omniparse models download
+
+# Every recognition run
+OMNIPARSE_OCR=ml omniparse photo.jpg
 ```
 
-First run downloads `text-detection.rten` and `text-recognition.rten`
-(~30 MB total) to `~/Library/Caches/omniparse/ocrs-models/` (macOS) or
-the platform-appropriate cache directory. Subsequent runs use the cache.
+Models live at `~/Library/Caches/omniparse/ocrs-models/` (macOS) or the
+platform-appropriate cache dir. Override with
+`OMNIPARSE_OCR_MODELS=<path>`.
 
 ### Library
 
 ```rust
 use omniparse::ocr::ml::MlOcrEngine;
-let engine = MlOcrEngine::new()?;
+let engine = MlOcrEngine::new()?;          // downloads + sha256-verifies on first call
 let image = image::open("photo.jpg")?;
 let output = engine.recognize(image)?;
 println!("{}", output.text);
 ```
-
-### Changing model cache location
-
-```sh
-export OMNIPARSE_OCR_MODELS=/opt/omniparse/models
-```
-
-Useful for shared installs or air-gapped environments where you want to
-pre-populate the cache manually.
 
 ## Quickstart: classical backend
 
@@ -98,7 +163,7 @@ pre-populate the cache manually.
 
 ```toml
 [dependencies]
-omniparse = { version = "0.3", features = ["ocr", "ocr-train"] }
+omniparse = { version = "0.4", features = ["ocr", "ocr-train"] }
 ```
 
 (`ocr-train` is only needed for prototype generation; drop it for runtime-
@@ -107,8 +172,7 @@ only deployments that ship their own prototype JSON.)
 ### Command line with bundled prototypes
 
 ```sh
-OMNIPARSE_OCR=1 \
-    cargo run --features ocr --release -- image.png
+OMNIPARSE_OCR=classical omniparse image.png
 ```
 
 The bundled prototypes are hand-authored 7×9 bitmap glyphs for uppercase
@@ -124,8 +188,8 @@ cargo run --features ocr-train --example train_prototypes -- \
     /System/Library/Fonts/Supplemental/Arial.ttf ./arial.json 24,48,96
 
 # Every recognition run
-OMNIPARSE_OCR=1 OMNIPARSE_OCR_PROTOTYPES=./arial.json \
-    cargo run --features ocr --release -- image.png
+OMNIPARSE_OCR=classical OMNIPARSE_OCR_PROTOTYPES=./arial.json \
+    omniparse image.png
 ```
 
 ## Training custom prototypes
@@ -307,14 +371,14 @@ Possible `ocr_status` values:
 - `no_text_found` — pipeline ran, nothing passed the confidence filter.
   Also see `ocr_regions` (how many candidates the layout stage found).
 - `error` — engine error. See `ocr_error` metadata.
-- (field absent) — OCR didn't run. Check `OMNIPARSE_OCR=1` and that the
-  `ocr` or `ocr-ml` feature is compiled in.
+- (field absent) — OCR didn't run. Check `OMNIPARSE_OCR=classical` (or
+  `=ml`) and that the `ocr` or `ocr-ml` feature is compiled in.
 
 ### Visual debugging
 
 ```sh
 export OMNIPARSE_OCR_DEBUG_DIR=/tmp/omniparse_debug
-OMNIPARSE_OCR=1 cargo run --features ocr --release -- image.jpg
+OMNIPARSE_OCR=classical omniparse image.jpg
 
 open /tmp/omniparse_debug/01_input.png         # original (grayscale)
 open /tmp/omniparse_debug/02_preprocessed.png  # after binarize + despeckle
@@ -335,11 +399,11 @@ Interpretation:
 
 When a PDF's text layer extraction returns empty, the PDF parser
 automatically OCRs every embedded `DCTDecode` (JPEG) image. Requires the
-same `OMNIPARSE_OCR=1` gate as image parsers. No extra configuration.
+same `OMNIPARSE_OCR=classical|ml` gate as image parsers. No extra
+configuration.
 
 ```sh
-OMNIPARSE_OCR=1 OMNIPARSE_OCR_ML=1 \
-    cargo run --features ocr-ml --release -- scanned.pdf
+OMNIPARSE_OCR=ml omniparse scanned.pdf
 ```
 
 Output concatenates per-image recognized text with `[image N of M]`
@@ -442,11 +506,11 @@ only need the `ocr` or `ocr-ml` feature plus a JSON prototype file (if
 classical) or the auto-downloaded models (if ML).
 
 **Q: Can I use the ML backend without internet access?**
-A: Yes, once the models are cached. Manually copy `text-detection.rten`
-and `text-recognition.rten` to
-`~/Library/Caches/omniparse/ocrs-models/` (or wherever
-`dirs::cache_dir()` returns on your OS) OR set
-`OMNIPARSE_OCR_MODELS=/some/path`.
+A: Yes. On a machine that does have internet, run `omniparse models
+download` (or `omniparse models download --force` to refresh) and then
+copy the resulting cache directory to the offline host. Point the offline
+binary at the copy via `OMNIPARSE_OCR_MODELS=/some/path`. The pre-built
+Docker image (see project `Dockerfile`) already bakes the models in.
 
 **Q: Why does the classical pipeline produce garbage on my photograph?**
 A: Likely font mismatch. The classical recognizer shape-matches input

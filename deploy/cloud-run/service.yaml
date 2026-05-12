@@ -1,0 +1,73 @@
+# Knative-style Cloud Run service manifest.
+#
+#   gcloud run services replace deploy/cloud-run/service.yaml \
+#       --project <PROJECT> --region <REGION>
+#
+# Replace IMAGE and PROJECT placeholders before applying, or use
+# deploy/cloud-run/deploy.sh which fills them in via gcloud flags.
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: omniparse-web
+  annotations:
+    run.googleapis.com/launch-stage: GA
+spec:
+  template:
+    metadata:
+      annotations:
+        # CPU is billed only during request handling by default. Turn off
+        # throttling if you need background work (e.g., model prewarm) to
+        # run after the response is sent — for omniparse this is fine
+        # either way because prewarm happens at startup, not at runtime.
+        run.googleapis.com/cpu-throttling: "false"
+        run.googleapis.com/startup-cpu-boost: "true"
+        autoscaling.knative.dev/minScale: "0"
+        autoscaling.knative.dev/maxScale: "10"
+        run.googleapis.com/execution-environment: gen2
+    spec:
+      # Identity the container runs as. Grant logging.logWriter,
+      # monitoring.metricWriter, cloudtrace.agent to this SA so the
+      # in-process logger / metrics / trace exporters can write to
+      # Cloud Observability without per-call auth.
+      serviceAccountName: omniparse-web@PROJECT.iam.gserviceaccount.com
+      containerConcurrency: 80
+      timeoutSeconds: 120
+      containers:
+        - image: ghcr.io/sirhco/omniparse-web:latest
+          ports:
+            - name: http1
+              containerPort: 8080
+          env:
+            - { name: OMNIPARSE_OCR,                value: "ml" }
+            - { name: OMNIPARSE_LOG,                value: "info" }
+            - { name: OMNIPARSE_LOG_FORMAT,         value: "cloud" }
+            - { name: OMNIPARSE_MAX_BODY_BYTES,     value: "26214400" }
+            - { name: OMNIPARSE_REQUEST_TIMEOUT_S,  value: "60" }
+            - { name: OMNIPARSE_PREWARM,            value: "1" }
+            - { name: OMNIPARSE_SHUTDOWN_GRACE_S,   value: "8" }
+            # Pull the admin token from Secret Manager. Uncomment + provide
+            # a secret named `omniparse-admin-token` in the project.
+            # - name: OMNIPARSE_ADMIN_TOKEN
+            #   valueFrom:
+            #     secretKeyRef:
+            #       name: omniparse-admin-token
+            #       key: latest
+          resources:
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          startupProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 12     # 60 s startup budget
+          livenessProbe:
+            httpGet:
+              path: /live
+              port: 8080
+            periodSeconds: 30
+            failureThreshold: 3
+  traffic:
+    - latestRevision: true
+      percent: 100

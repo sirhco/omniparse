@@ -25,6 +25,7 @@ use axum::{
 use omniparse::{extract_from_bytes, detection::TypeDetector};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
+use std::str::FromStr;
 
 #[tokio::main]
 async fn main() {
@@ -35,15 +36,20 @@ async fn main() {
         .route("/detect", post(detect_file))
         .route("/health", get(health_check));
 
-    // Start the server
-    let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
-    println!("🚀 Server running on http://{}", addr);
+    // Bind address. Default is localhost-only so a `cargo run --example
+    // web_service` doesn't unexpectedly expose the port. Override with
+    // `OMNIPARSE_BIND=0.0.0.0:3000` in containers / production.
+    let bind = std::env::var("OMNIPARSE_BIND")
+        .unwrap_or_else(|_| "127.0.0.1:3000".to_string());
+    let addr = SocketAddr::from_str(&bind)
+        .unwrap_or_else(|e| panic!("invalid OMNIPARSE_BIND={bind:?}: {e}"));
+    println!("Omniparse web service listening on http://{}", addr);
     println!("\nEndpoints:");
     println!("  POST /parse   - Parse file and extract content");
     println!("  POST /detect  - Detect file type only");
     println!("  GET  /health  - Health check");
     println!("\nExample:");
-    println!("  curl -X POST -F \"file=@test_data/text/sample.json\" http://localhost:3000/parse");
+    println!("  curl -X POST -F \"file=@test_data/text/sample.json\" http://{}/parse", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app).await.unwrap();

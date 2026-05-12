@@ -1,5 +1,6 @@
 //! Document format parsers
 
+#[cfg(feature = "pdf")]
 mod pdf;
 mod docx;
 mod odt;
@@ -13,6 +14,7 @@ mod ppt;
 #[cfg(feature = "epub")]
 mod epub;
 
+#[cfg(feature = "pdf")]
 pub use pdf::PdfParser;
 pub use docx::DocxParser;
 pub use odt::OdtParser;

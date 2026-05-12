@@ -1,0 +1,41 @@
+# Single-service compose for local development of the omniparse production
+# web API. Matches Cloud Run's runtime contract: PORT=8080, structured
+# logs, baked-in ML models.
+#
+#   docker compose up --build       # build + run
+#   curl -s http://localhost:8080/live
+#   curl -s http://localhost:8080/ready
+#   curl -s -X POST -F file=@test_data/ocr/hello_world.png http://localhost:8080/parse
+
+services:
+  omniparse-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: omniparse-web:dev
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      OMNIPARSE_OCR: "ml"
+      OMNIPARSE_LOG: "info"
+      OMNIPARSE_LOG_FORMAT: "pretty"
+      OMNIPARSE_PREWARM: "1"
+      # Set for in-app bearer auth instead of relying on an upstream proxy.
+      # OMNIPARSE_AUTH_TOKEN: "your-secret-here"
+      # Set to expose /metrics and /debug/info:
+      # OMNIPARSE_ADMIN_TOKEN: "admin-secret"
+      # Override the baked-in model directory by mounting a volume:
+      # OMNIPARSE_OCR_MODELS: "/models"
+    # volumes:
+    #   - ./my-models:/models:ro
+    mem_limit: 2g
+    cpus: 2.0
+    restart: unless-stopped
+    healthcheck:
+      # Distroless has no shell, so the binary itself runs the probe.
+      test: ["CMD", "/usr/local/bin/web_service_prod", "--healthcheck"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3

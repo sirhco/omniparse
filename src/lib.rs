@@ -28,10 +28,31 @@
 //! | `webp`          | **on**  | WebP parser                           |
 //! | `epub`          | **on**  | EPUB parser                           |
 //! | `mp3`           | **on**  | MP3 parser                            |
+//! | `pdf`           | **on**  | PDF parser via `lopdf` + lenient fallback (`weezl` / `ascii85`) |
+//! | `pdf-extract`   | off     | 4th-tier PDF fallback via `pdf-extract` (linearized / Identity-H PDFs) |
 //! | `ocr`           | off     | Classical OCR pipeline                |
 //! | `ocr-train`     | off     | TTF → prototype trainer               |
 //! | `ocr-parallel`  | off     | Parallel per-region recognition       |
 //! | `ocr-ml`        | off     | ML OCR backend (ocrs + rten)          |
+//!
+//! ## Acknowledgments
+//!
+//! Omniparse stands on the shoulders of several pure-Rust libraries. The
+//! PDF tier specifically uses:
+//!
+//! - [`lopdf`](https://crates.io/crates/lopdf) — strict-tier PDF parser
+//!   (xref / trailer / object dictionary parse, embedded-image extraction
+//!   for the OCR path). MIT licensed.
+//! - [`weezl`](https://crates.io/crates/weezl) — LZWDecode filter
+//!   support in the raw_scan fallback. MIT/Apache-2.0.
+//! - [`ascii85`](https://crates.io/crates/ascii85) — ASCII85Decode filter
+//!   support in the raw_scan fallback. MIT/Apache-2.0.
+//! - [`pdf-extract`](https://crates.io/crates/pdf-extract) (optional, behind
+//!   the `pdf-extract` feature) — 4th-tier text extraction for PDFs that
+//!   lopdf can't load. MIT licensed.
+//!
+//! See `Cargo.toml` for the full dependency tree and per-crate version
+//! pins.
 //!
 //! ## Quickstart
 //!
@@ -96,16 +117,21 @@
 //! }
 //! ```
 //!
-//! ## OCR (v0.3)
+//! ## OCR
 //!
-//! OCR is runtime-opt-in via `OMNIPARSE_OCR=1` plus the `ocr` or `ocr-ml`
-//! Cargo feature. Image parsers automatically route through OCR when the
-//! gate is set and populate `ocr_status` / `ocr_confidence` / `ocr_applied`
+//! Off by default. One env var selects the backend at runtime:
+//!
+//! - `OMNIPARSE_OCR=classical` — pure-Rust classical pipeline (`ocr` feature)
+//! - `OMNIPARSE_OCR=ml` — ML backend via `ocrs` + `rten` (`ocr-ml` feature)
+//! - `OMNIPARSE_OCR=off` / unset — OCR disabled (image parsers extract EXIF only)
+//!
+//! Image and PDF parsers automatically route through OCR when the gate is
+//! set and populate `ocr_status` / `ocr_confidence` / `ocr_applied`
 //! metadata.
 //!
 //! ```no_run
 //! # #[cfg(feature = "ocr")] {
-//! // OMNIPARSE_OCR=1 in the environment activates OCR for image parsers.
+//! // OMNIPARSE_OCR=classical (or =ml) activates OCR for image parsers.
 //! let result = omniparse::extract_from_path("photo.jpg")?;
 //! if let Some(status) = result.metadata.get("ocr_status") {
 //!     println!("ocr_status = {status:?}");
@@ -127,8 +153,9 @@
 //! # Ok::<(), omniparse::Error>(())
 //! ```
 //!
-//! ML backend (requires `ocr-ml` feature, pre-trained models download on
-//! first use):
+//! ML backend (requires `ocr-ml` feature; pre-trained models are downloaded
+//! and SHA-256-verified on first use, or pre-fetched via the CLI
+//! `omniparse models download`):
 //!
 //! ```no_run
 //! # #[cfg(feature = "ocr-ml")] {
@@ -140,8 +167,8 @@
 //! # Ok::<(), omniparse::Error>(())
 //! ```
 //!
-//! See [`OCR_GUIDE.md`] for training, tuning, debugging, and the full env
-//! var reference.
+//! See [`OCR_GUIDE.md`] for the model-cache CLI, training custom
+//! prototypes, tuning, debugging, and the full env-var reference.
 //!
 //! [`SUPPORTED_FORMATS.md`]: https://github.com/sirhco/omniparse/blob/main/SUPPORTED_FORMATS.md
 //! [`OCR_GUIDE.md`]: https://github.com/sirhco/omniparse/blob/main/OCR_GUIDE.md

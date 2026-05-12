@@ -13,6 +13,7 @@ fn registry_reuses_cached_instance_across_calls() {
     let b = supported_mime_types();
     assert_eq!(a.len(), b.len());
     assert!(!a.is_empty());
+    #[cfg(feature = "pdf")]
     assert!(is_mime_supported("application/pdf"));
     assert!(!is_mime_supported("application/x-definitely-fake"));
 }
@@ -156,23 +157,34 @@ fn zip_parser_clean_archive_reports_no_unsafe_paths() {
 
 #[test]
 fn pdf_parser_reports_version_and_encryption() {
+    #[cfg(not(feature = "pdf"))]
+    return;
+    #[cfg(feature = "pdf")]
     let Ok(data) = std::fs::read("test_data/document/sample.pdf") else {
         return; // fixture optional
     };
-    // Fixture may be malformed (the existing sample.pdf is known-minimal);
-    // we only validate output shape when the parser succeeds.
+    #[cfg(feature = "pdf")]
+    // Fixture may be malformed. In that case the parser falls through to
+    // the raw_scan tier, which only guarantees pdf_version (scanned from
+    // the header). The richer fields require lopdf to load successfully.
     if let Ok(result) = extract_from_bytes(&data, Some("application/pdf")) {
+        let raw_scan = matches!(
+            result.metadata.get("pdf_parse_strategy"),
+            Some(MetadataValue::Text(s)) if s == "raw_scan"
+        );
         assert!(matches!(
             result.metadata.get("pdf_version"),
             Some(MetadataValue::Text(_))
         ));
-        assert!(matches!(
-            result.metadata.get("encrypted"),
-            Some(MetadataValue::Boolean(_))
-        ));
-        assert!(matches!(
-            result.metadata.get("annotations_count"),
-            Some(MetadataValue::Number(_))
-        ));
+        if !raw_scan {
+            assert!(matches!(
+                result.metadata.get("encrypted"),
+                Some(MetadataValue::Boolean(_))
+            ));
+            assert!(matches!(
+                result.metadata.get("annotations_count"),
+                Some(MetadataValue::Number(_))
+            ));
+        }
     }
 }
