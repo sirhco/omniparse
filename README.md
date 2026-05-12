@@ -9,6 +9,7 @@ A Rust toolkit for detecting and extracting metadata, text, and content from hun
 - **Rich Metadata Extraction**: Full EXIF for JPEG/TIFF, OpenGraph / Twitter / canonical for HTML, ID3 for MP3, OPF for EPUB, version/encryption/forms/annotations for PDF, and more
 - **OCR Subsystem**: Optional classical and ML OCR pipelines for images and scanned PDFs. Pure Rust. Models download on first use for the ML backend (or pre-fetch via `omniparse models download`); classical backend has no external dependencies.
 - **Production Web Service**: Ship-ready Axum example (`examples/web_service_prod.rs`) with Cloud Logging JSON, Prometheus `/metrics`, liveness/readiness probes, request limits, panic catcher, graceful shutdown — baked into the published Docker image and one-command deployable to Google Cloud Run via `deploy/cloud-run/deploy.sh`.
+- **Robust PDF parsing**: Four-tier fallback chain (strict via `lopdf` → trailing-junk repair → raw stream-byte scan with FlateDecode/LZWDecode/ASCII85Decode → optional `pdf-extract` for linearized / Identity-H + /ToUnicode CMap PDFs). Real-world inputs from Lucidchart, Word print-to-PDF, browser print-to-PDF, truncated downloads — all yield text instead of `"Invalid file trailer"`. A `pdf_parse_strategy` metadata field surfaces which tier ran.
 - **Dual Interface**: Use as a CLI tool or integrate as a library in your Rust applications
 - **Pure Rust Implementation**: Minimal dependencies, no external system libraries required
 - **Async Support**: Optional async API for non-blocking operations
@@ -78,6 +79,42 @@ For parallel processing:
 [dependencies]
 omniparse = { version = "0.4", features = ["parallel"] }
 ```
+
+For broader PDF coverage (Lucidchart / Word print-to-PDF / linearized
+PDFs that the default lopdf-based tiers can't load):
+
+```toml
+[dependencies]
+omniparse = { version = "0.4", features = ["pdf-extract"] }
+```
+
+To build without PDF support at all (smaller dependency tree):
+
+```toml
+[dependencies]
+omniparse = { version = "0.4", default-features = false, features = ["markdown", "svg", "webp", "epub", "mp3"] }
+```
+
+Full feature reference: see [Cargo features](#cargo-features) in this
+README or the table in `cargo doc --open`.
+
+### Cargo features
+
+| Feature        | Default | Purpose                                                                  |
+| -------------- | ------- | ------------------------------------------------------------------------ |
+| `pdf`          | **on**  | PDF parsing via `lopdf` + lenient raw_scan fallback (Flate/LZW/ASCII85)  |
+| `pdf-extract`  | off     | 4th-tier PDF fallback via `pdf-extract` (linearized / Identity-H CMaps)  |
+| `markdown`     | **on**  | Markdown parser                                                          |
+| `svg`          | **on**  | SVG parser                                                               |
+| `webp`         | **on**  | WebP parser                                                              |
+| `epub`         | **on**  | EPUB parser                                                              |
+| `mp3`          | **on**  | MP3 ID3v1/v2 parser                                                      |
+| `async`        | off     | tokio-backed `extract_from_path_async`                                   |
+| `parallel`     | off     | rayon-backed `process_files_parallel`                                    |
+| `ocr`          | off     | Classical OCR pipeline (pure Rust, no external deps)                     |
+| `ocr-ml`       | off     | ML OCR backend via `ocrs` + `rten`, models auto-downloaded               |
+| `ocr-train`    | off     | TTF/OTF → prototype trainer for the classical OCR pipeline               |
+| `ocr-parallel` | off     | Parallel per-region OCR recognition (implies `ocr` + `parallel`)         |
 
 ### OCR — quickstart
 
