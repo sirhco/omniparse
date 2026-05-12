@@ -12,10 +12,13 @@
 # ---------- cargo-chef base ----------
 # `cargo-chef` separates dependency compilation from source compilation so
 # code-only changes don't re-pull/recompile the dependency graph.
-FROM rust:1.88-slim-bookworm AS chef
+FROM rust:1-slim-bookworm AS chef
 WORKDIR /src
 RUN apt-get update \
- && apt-get install -y --no-install-recommends pkg-config ca-certificates \
+ && apt-get install -y --no-install-recommends \
+        pkg-config \
+        ca-certificates \
+        libssl-dev \
  && rm -rf /var/lib/apt/lists/* \
  && cargo install cargo-chef --locked --version ^0.1
 

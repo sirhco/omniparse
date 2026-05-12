@@ -25,6 +25,38 @@ curl -X POST -F "file=@test_data/document/sample.docx" http://localhost:3000/det
 curl -X POST -F "file=@test_data/text/sample.csv" http://localhost:3000/parse?metadata_only=true
 ```
 
+### OCR-specific fixtures
+
+The repo ships pre-generated OCR test files at `test_data/ocr/`. They're
+rendered from a system font into clean printed Latin — easy targets for
+both backends and a quick way to confirm the container's ML OCR pipeline
+is wired correctly.
+
+```bash
+# Single-line image
+curl -s -X POST -F "file=@test_data/ocr/hello_world.png" http://localhost:3000/parse | jq .
+# expected: "content": "HELLO WORLD", "ocr_status": "recognized"
+
+# Multi-line image (mixed case + digits)
+curl -s -X POST -F "file=@test_data/ocr/multi_line.png" http://localhost:3000/parse | jq .content
+
+# JPEG variant (same text, lossy compression)
+curl -s -X POST -F "file=@test_data/ocr/hello_world.jpg" http://localhost:3000/parse | jq .content
+
+# Scanned PDF (single page, image-only, no text layer)
+curl -s -X POST -F "file=@test_data/ocr/scanned.pdf" http://localhost:3000/parse | jq .
+# expected: "ocr_images_total": 1, "ocr_images_recognized": 1
+```
+
+Regenerate or extend with custom strings:
+
+```sh
+cargo run --features ocr-train --example create_ocr_fixtures
+# or specify font + output dir
+cargo run --features ocr-train --example create_ocr_fixtures -- \
+    /System/Library/Fonts/Supplemental/Arial.ttf  test_data/ocr
+```
+
 ### 3. Run the Test Script
 
 ```bash
