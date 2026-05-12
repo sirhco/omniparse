@@ -52,6 +52,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Acknowledgments**: README + lib.rs now credit lopdf, pdf-extract,
   weezl, ascii85, ocrs, rten, and other pure-Rust libraries the parser
   tiers sit on.
+- **Maximal Docker image**: the published image now builds with every
+  capability flag enabled:
+  `ocr-ml ocr-train ocr-parallel pdf-extract async parallel` plus the
+  default set (`pdf markdown svg webp epub mp3`). One image covers every
+  input class without needing per-team rebuilds.
 
 ## [0.4.0] - 2026-05-12
 

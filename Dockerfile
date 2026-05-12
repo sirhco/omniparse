@@ -4,14 +4,27 @@
 # capability flag enabled so the published image is a single drop-in for
 # all real-world inputs:
 #
-#   Feature       Effect
-#   ----------    ----------------------------------------------------------
-#   ocr-ml        Classical + ML OCR for images and scanned PDFs.
-#   pdf           Strict-tier PDF parser (lopdf) + lenient raw_scan fallback
-#                 (FlateDecode / LZWDecode / ASCII85Decode). On by default.
-#   pdf-extract   Fourth-tier PDF parser (pdf-extract crate) — handles
-#                 linearized PDFs and Identity-H + /ToUnicode CMaps that
-#                 lopdf rejects (Lucidchart exports, Word print-to-PDF, etc.).
+#   Feature        Effect
+#   -----------    ---------------------------------------------------------
+#   pdf            Strict-tier PDF parser (lopdf) + lenient raw_scan
+#                  fallback (FlateDecode / LZWDecode / ASCII85Decode).
+#                  Default-on; bundled via the implicit default set.
+#   pdf-extract    Fourth-tier PDF parser (pdf-extract crate) — handles
+#                  linearized PDFs and Identity-H + /ToUnicode CMaps that
+#                  lopdf rejects (Lucidchart exports, Word/PowerPoint
+#                  print-to-PDF, browser print-to-PDF).
+#   ocr            Classical pure-Rust OCR pipeline (default off; pulled
+#                  in transitively by ocr-ml and ocr-parallel).
+#   ocr-ml         ML OCR backend via ocrs + rten with auto-downloaded,
+#                  SHA-256-verified models at /opt/omniparse/models.
+#   ocr-train      Train custom glyph prototypes from a TTF/OTF font for
+#                  the classical OCR pipeline.
+#   ocr-parallel   Per-region OCR recognition parallelized via rayon.
+#                  Implies `ocr` + `parallel`.
+#   async          tokio-backed async extraction (extract_from_path_async).
+#   parallel       Rayon-backed batch processing (process_files_parallel).
+#   markdown, svg, webp, epub, mp3
+#                  Format parsers bundled by default.
 #
 # Ship the production `web_service_prod` example binary plus the
 # pre-downloaded, SHA-256-verified rten models at `/opt/omniparse/models`.
@@ -46,11 +59,11 @@ RUN cargo chef prepare --recipe-path recipe.json
 # ---------- dependency build + binary build ----------
 FROM chef AS builder
 COPY --from=planner /src/recipe.json recipe.json
-RUN cargo chef cook --release --features "ocr-ml pdf-extract" --recipe-path recipe.json
+RUN cargo chef cook --release --features "ocr-ml ocr-train ocr-parallel pdf-extract async parallel" --recipe-path recipe.json
 COPY . .
-RUN cargo build --release --features "ocr-ml pdf-extract" --bin omniparse \
- && cargo build --release --features "ocr-ml pdf-extract" --example web_service \
- && cargo build --release --features "ocr-ml pdf-extract" --example web_service_prod
+RUN cargo build --release --features "ocr-ml ocr-train ocr-parallel pdf-extract async parallel" --bin omniparse \
+ && cargo build --release --features "ocr-ml ocr-train ocr-parallel pdf-extract async parallel" --example web_service \
+ && cargo build --release --features "ocr-ml ocr-train ocr-parallel pdf-extract async parallel" --example web_service_prod
 
 # ---------- model fetch + verify ----------
 # Isolated stage so the model layer only invalidates when the model URLs or
