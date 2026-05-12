@@ -54,6 +54,53 @@
 //! See `Cargo.toml` for the full dependency tree and per-crate version
 //! pins.
 //!
+//! ## PDF parsing tiers
+//!
+//! Real-world PDFs are messy — truncated downloads, linearized exports,
+//! Identity-H + /ToUnicode CMaps, and appended HTTP-chunk garbage all
+//! defeat strict parsers. Omniparse's PDF parser is a four-tier fallback
+//! chain so the caller almost always gets text:
+//!
+//! 1. **strict** — `lopdf::Document::load_mem`. Full metadata + per-page
+//!    text. Most well-formed PDFs.
+//! 2. **repaired_xref** — truncate trailing bytes after the last `%%EOF`,
+//!    retry strict load. Catches HTTP-chunk leftovers / double-`%%EOF`.
+//! 3. **raw_scan** — walk `stream`/`endstream` byte ranges, decode
+//!    FlateDecode / LZWDecode / ASCII85Decode / uncompressed payloads,
+//!    regex-extract `Tj` / `TJ` operators. Recovers text from PDFs
+//!    lopdf can't load. Output gated by a "looks-like-text" heuristic
+//!    so glyph-index / encrypted bytes don't reach the caller.
+//! 4. **pdf_extract** (only with `--features pdf-extract`) — re-parse via
+//!    [`pdf-extract`](https://crates.io/crates/pdf-extract). Tolerates
+//!    linearized PDFs + Identity-H + /ToUnicode CMaps (Lucidchart, Word
+//!    print-to-PDF, browser print-to-PDF).
+//!
+//! Every successful response carries a `pdf_parse_strategy` metadata
+//! field (`"strict"` / `"repaired_xref"` / `"raw_scan"` / `"pdf_extract"`).
+//! Tiers 2–4 also set `pdf_parse_partial = true` and
+//! `pdf_parse_error = "<original lopdf error>"`. Tier 4 is the most
+//! important opt-in for shops processing Lucidchart or Word-print
+//! exports.
+//!
+//! ```no_run
+//! # #[cfg(feature = "pdf")] {
+//! let result = omniparse::extract_from_path("document.pdf")?;
+//! if let Some(strategy) = result.metadata.get("pdf_parse_strategy") {
+//!     println!("PDF parsed via tier: {strategy:?}");
+//! }
+//! # }
+//! # Ok::<(), omniparse::Error>(())
+//! ```
+//!
+//! ## Web service example
+//!
+//! See `examples/web_service_prod.rs` for a Cloud Run-ready Axum service
+//! that wraps this library: Cloud Logging JSON output, Prometheus
+//! `/metrics`, `/live` + `/ready` probes, body-size + timeout +
+//! concurrency limits, panic catcher, graceful shutdown, and a
+//! `--healthcheck` mode for distroless containers. The published
+//! Docker image uses this binary as its `ENTRYPOINT`.
+//!
 //! ## Quickstart
 //!
 //! ```no_run

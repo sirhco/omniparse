@@ -7,7 +7,7 @@ authors = ["Chris Olson"]
 description = "A Rust toolkit for detecting and extracting metadata, text, and content from various file formats"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/sirhco/omniparse"
-keywords = ["parser", "extraction", "metadata", "mime", "content"]
+keywords = ["parser", "extraction", "pdf", "ocr", "metadata"]
 categories = ["parsing", "text-processing"]
 
 [lib]
