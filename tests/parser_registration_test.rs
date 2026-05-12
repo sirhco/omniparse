@@ -18,6 +18,7 @@ const REQUIRED_MIME_TYPES: &[&str] = &[
     "text/css",
     "application/rtf",
     // Documents
+    #[cfg(feature = "pdf")]
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     "application/docx",

@@ -163,7 +163,7 @@ println!("{}", output.text);
 
 ```toml
 [dependencies]
-omniparse = { version = "0.3", features = ["ocr", "ocr-train"] }
+omniparse = { version = "0.4", features = ["ocr", "ocr-train"] }
 ```
 
 (`ocr-train` is only needed for prototype generation; drop it for runtime-
@@ -371,8 +371,8 @@ Possible `ocr_status` values:
 - `no_text_found` — pipeline ran, nothing passed the confidence filter.
   Also see `ocr_regions` (how many candidates the layout stage found).
 - `error` — engine error. See `ocr_error` metadata.
-- (field absent) — OCR didn't run. Check `OMNIPARSE_OCR=1` and that the
-  `ocr` or `ocr-ml` feature is compiled in.
+- (field absent) — OCR didn't run. Check `OMNIPARSE_OCR=classical` (or
+  `=ml`) and that the `ocr` or `ocr-ml` feature is compiled in.
 
 ### Visual debugging
 

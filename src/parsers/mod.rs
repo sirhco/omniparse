@@ -274,6 +274,7 @@ impl Default for ParserRegistry {
         registry.register(Box::new(text::MarkdownParser));
 
         // Register Phase 2 document parsers
+        #[cfg(feature = "pdf")]
         registry.register(Box::new(document::PdfParser));
         registry.register(Box::new(document::DocxParser));
         registry.register(Box::new(document::OdtParser));

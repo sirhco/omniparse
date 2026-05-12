@@ -244,6 +244,7 @@ fn test_xml_parser_with_namespaces() {
 // DOCUMENT PARSER TESTS
 // ============================================================================
 
+#[cfg(feature = "pdf")]
 #[test]
 fn test_pdf_parser_basic() {
     let registry = ParserRegistry::default();
@@ -267,6 +268,7 @@ fn test_pdf_parser_basic() {
     }
 }
 
+#[cfg(feature = "pdf")]
 #[test]
 fn test_pdf_parser_empty() {
     let registry = ParserRegistry::default();

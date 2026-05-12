@@ -172,14 +172,69 @@ Omniparse currently supports **35+ MIME types** across **4 major categories**:
   - Multi-page text extraction
   - Document metadata extraction
   - Page counting
+  - Form-field, annotation, attachment counts (`form_fields_count`,
+    `annotations_count`, `attachments_count`)
+  - Optional OCR fallback for image-only / scanned PDFs (DCTDecode images,
+    `ocr` or `ocr-ml` feature required)
+  - **Lenient parsing** (v0.4.1+): three-tier fallback chain so real-world
+    PDFs with trailing garbage, missing trailers, or corrupted xref still
+    yield text. See [PDF parsing tiers](#pdf-parsing-tiers) below.
 - **Metadata Extracted**:
   - `page_count`: Number of pages
-  - `title`: Document title
-  - `author`: Document author
-  - `subject`: Document subject
-  - `creator`: Creating application
-  - `producer`: PDF producer
-  - `creation_date`: Creation date
+  - `pdf_version`: PDF spec version (e.g. `"1.4"`, `"2.0"`)
+  - `encrypted`: Whether the document has an `/Encrypt` dictionary
+  - `title`, `author`, `subject`, `creator`, `producer`, `keywords`:
+    document Info fields
+  - `creation_date`, `modification_date`
+  - `page_layout`, `page_mode`: catalog hints
+  - `form_fields_count`, `annotations_count`, `attachments_count`
+  - `pdf_parse_strategy`: which tier extracted the content
+    (`strict` / `repaired_xref` / `raw_scan`)
+  - `pdf_parse_partial`: `true` when a fallback tier ran (some metadata
+    may be missing)
+  - `pdf_parse_error`: the strict-tier error string when `raw_scan` ran
+
+#### PDF parsing tiers
+
+1. **strict** — `lopdf::Document::load_mem`. Full metadata, structured
+   per-page text. Works on most well-formed PDFs.
+2. **repaired_xref** — scans backward for the last `%%EOF` marker,
+   truncates trailing junk, retries strict load. Recovers PDFs with
+   appended HTTP-chunk leftovers, double-`%%EOF` exports, etc. Same
+   output shape as strict.
+3. **raw_scan** — walks every `stream` / `endstream` pair in the bytes,
+   tries each supported PDF stream filter in order (FlateDecode, LZWDecode,
+   ASCII85Decode, uncompressed), and regex-extracts `(literal) Tj` and
+   `[...] TJ` content operators from any decoder output that contains
+   text-operator tokens. No structural parse → no per-page split, no rich
+   metadata, but recovers text from PDFs lopdf can't load.
+   Output is gated by a "looks-like-text" heuristic (≥60% printable
+   chars + at least one 4-char alphanumeric run); if the recovered bytes
+   are glyph indices (custom font `/Encoding` or `/ToUnicode` CMap), encrypted
+   noise, or use a stream filter we don't decode, the tier falls through
+   to tier 4 (when enabled) or surfaces a parse error.
+4. **pdf_extract** (optional, requires `--features pdf-extract`) —
+   re-parse via the [`pdf-extract`](https://crates.io/crates/pdf-extract)
+   crate. Different structural parser that tolerates linearized PDFs and
+   Identity-H + /ToUnicode CMaps — catches Lucidchart exports, modern
+   Word/PowerPoint print-to-PDF, browser print-to-PDF, and similar
+   real-world inputs that all three lopdf-based tiers reject. Same
+   `looks_like_text` gate applies. Text-only (no per-page split, no rich
+   metadata beyond `pdf_version` scanned from the header).
+
+#### Known PDF limitations
+
+- `FlateDecode`, `JPXDecode`, `CCITTFaxDecode` image filters: OCR path
+  silently skips affected images (only `DCTDecode` / JPEG flows through).
+- Encrypted PDFs: no user-password support; `encrypted: true` is reported
+  but content extraction will fail.
+- Vector-only / no-text-layer / no-image PDFs: nothing to extract.
+- Severely truncated files (header gone, no recoverable streams): hard
+  error.
+- Repair the `qpdf` way for files our parser still can't handle:
+  ```sh
+  qpdf --linearize broken.pdf fixed.pdf
+  ```
 
 ### Microsoft Word (DOCX)
 - **MIME Types**: 

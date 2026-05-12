@@ -28,10 +28,31 @@
 //! | `webp`          | **on**  | WebP parser                           |
 //! | `epub`          | **on**  | EPUB parser                           |
 //! | `mp3`           | **on**  | MP3 parser                            |
+//! | `pdf`           | **on**  | PDF parser via `lopdf` + lenient fallback (`weezl` / `ascii85`) |
+//! | `pdf-extract`   | off     | 4th-tier PDF fallback via `pdf-extract` (linearized / Identity-H PDFs) |
 //! | `ocr`           | off     | Classical OCR pipeline                |
 //! | `ocr-train`     | off     | TTF → prototype trainer               |
 //! | `ocr-parallel`  | off     | Parallel per-region recognition       |
 //! | `ocr-ml`        | off     | ML OCR backend (ocrs + rten)          |
+//!
+//! ## Acknowledgments
+//!
+//! Omniparse stands on the shoulders of several pure-Rust libraries. The
+//! PDF tier specifically uses:
+//!
+//! - [`lopdf`](https://crates.io/crates/lopdf) — strict-tier PDF parser
+//!   (xref / trailer / object dictionary parse, embedded-image extraction
+//!   for the OCR path). MIT licensed.
+//! - [`weezl`](https://crates.io/crates/weezl) — LZWDecode filter
+//!   support in the raw_scan fallback. MIT/Apache-2.0.
+//! - [`ascii85`](https://crates.io/crates/ascii85) — ASCII85Decode filter
+//!   support in the raw_scan fallback. MIT/Apache-2.0.
+//! - [`pdf-extract`](https://crates.io/crates/pdf-extract) (optional, behind
+//!   the `pdf-extract` feature) — 4th-tier text extraction for PDFs that
+//!   lopdf can't load. MIT licensed.
+//!
+//! See `Cargo.toml` for the full dependency tree and per-crate version
+//! pins.
 //!
 //! ## Quickstart
 //!

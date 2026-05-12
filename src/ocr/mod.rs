@@ -62,7 +62,7 @@ pub struct OcrConfig {
     /// Whether image parsers should invoke OCR on decode. Defaults to `false`
     /// so flipping the `ocr` Cargo feature doesn't silently slow every image
     /// parse; callers opt in via `OcrConfig::enabled = true` or the
-    /// `OMNIPARSE_OCR=1` env var.
+    /// `OMNIPARSE_OCR=classical|ml` env var.
     pub enabled: bool,
     /// Drop recognized lines below this mean confidence.
     pub min_confidence: f32,

@@ -1,8 +1,31 @@
 # Omniparse Web Service Guide
 
-This guide shows you how to build a production-ready web service using Omniparse and Axum.
+This guide shows you how to build a web service using Omniparse and Axum.
+Two ready-to-run examples ship in `examples/`:
 
-## Quick Start
+| Example                           | Audience                             | Use when                                  |
+| --------------------------------- | ------------------------------------ | ----------------------------------------- |
+| `examples/web_service.rs`         | Tutorial / minimal demo              | Reading the code; smallest learnable surface |
+| `examples/web_service_prod.rs`    | Production — Cloud Run target        | You want to deploy this for real          |
+
+The production example adds: structured Cloud Logging JSON, Prometheus
+`/metrics`, distinct `/live` vs `/ready` probes (with model SHA-256
+verification), body-size limit, request timeout, concurrency cap,
+panic catcher, request-id propagation, `X-Cloud-Trace-Context` →
+log/trace correlation, graceful shutdown sized for Cloud Run's 10 s
+SIGKILL window, model prewarm, optional bearer-token auth, and a
+`--healthcheck` mode so the binary itself serves as the Docker
+`HEALTHCHECK` command on distroless. The published Docker image uses
+**the production binary** as its `ENTRYPOINT`.
+
+## Quick Start (minimal demo)
+
+> **Port note:** the minimal demo (`examples/web_service.rs`) listens on
+> **port 3000** by default. The production example
+> (`examples/web_service_prod.rs`) — and the published Docker image — listen
+> on **port 8080** (Cloud Run convention). When using the production binary,
+> swap `:3000` for `:8080` in every `curl` below. See
+> [Production example](#production-example-cloud-run).
 
 ### 1. Run the Example Server
 
@@ -297,8 +320,10 @@ let app = Router::new()
 ### Docker Deployment
 
 A production-ready multi-stage `Dockerfile` lives at the project root. It
-bakes the ML OCR models into the image at `/opt/omniparse/models` (SHA-256
-verified at build time) and ships a distroless runtime under a non-root UID.
+builds the production example (`examples/web_service_prod.rs`) as its
+`ENTRYPOINT`, bakes the ML OCR models into the image at
+`/opt/omniparse/models` (SHA-256 verified at build time), and ships a
+distroless runtime under a non-root UID.
 
 ```sh
 # Build locally
@@ -306,31 +331,45 @@ docker build -t omniparse-web:dev .
 
 # Or use the pre-published image (multi-arch: linux/amd64 + linux/arm64)
 docker pull ghcr.io/sirhco/omniparse-web:latest
-docker run --rm -p 3000:3000 ghcr.io/sirhco/omniparse-web:latest
+docker run --rm -p 8080:8080 ghcr.io/sirhco/omniparse-web:latest
 ```
 
 For local development, a `docker-compose.yml` is also provided:
 
 ```sh
 docker compose up --build
+curl -s http://localhost:8080/ready
 ```
 
-Runtime knobs honored by the image:
+Container baseline runtime config (override via `-e VAR=value`):
 
-| Env var                  | Default                  | Purpose                              |
-| ------------------------ | ------------------------ | ------------------------------------ |
-| `OMNIPARSE_BIND`         | `0.0.0.0:3000`           | Address to listen on                 |
-| `OMNIPARSE_OCR`          | `ml`                     | OCR backend (`off`/`classical`/`ml`) |
-| `OMNIPARSE_OCR_MODELS`   | `/opt/omniparse/models`  | Where to read the rten models from   |
+| Env var                | Default                  | Purpose                                  |
+| ---------------------- | ------------------------ | ---------------------------------------- |
+| `PORT`                 | `8080`                   | Listener port (Cloud Run injects this)   |
+| `OMNIPARSE_OCR`        | `ml`                     | OCR backend (`off` / `classical` / `ml`) |
+| `OMNIPARSE_OCR_MODELS` | `/opt/omniparse/models`  | Where to read the rten models from       |
+
+Full env var reference for the production binary is in the
+[Production example](#production-example-cloud-run) section below.
 
 To use a host-side model cache instead of the baked-in one, mount a volume
 over `/opt/omniparse/models` (or override `OMNIPARSE_OCR_MODELS` and mount
 elsewhere):
 
 ```sh
-docker run --rm -p 3000:3000 \
+docker run --rm -p 8080:8080 \
   -e OMNIPARSE_OCR_MODELS=/models \
   -v "$PWD/my-models:/models:ro" \
+  ghcr.io/sirhco/omniparse-web:latest
+```
+
+Want the minimal demo binary inside the same image? Override the
+entrypoint:
+
+```sh
+docker run --rm -p 3000:3000 \
+  --entrypoint /usr/local/bin/web_service \
+  -e OMNIPARSE_BIND=0.0.0.0:3000 \
   ghcr.io/sirhco/omniparse-web:latest
 ```
 
@@ -403,8 +442,132 @@ kill $SERVER_PID
 - Enable streaming for large files
 - Reduce concurrent request limits
 
+## Production example (Cloud Run)
+
+`examples/web_service_prod.rs` is built around Google Cloud Run's runtime
+contract: single listener on `$PORT`, structured Cloud Logging JSON to
+stdout, SIGTERM-driven 8 s graceful shutdown, IAM-based auth at the LB
+(`--no-allow-unauthenticated`).
+
+### Endpoints
+
+| Method | Path        | Auth                   | Purpose                                       |
+| ------ | ----------- | ---------------------- | --------------------------------------------- |
+| GET    | /           | none                   | Service banner                                |
+| GET    | /live       | none                   | Liveness — always 200                         |
+| GET    | /ready      | none                   | Readiness — 200 only when models verify       |
+| POST   | /parse      | IAM (or bearer)        | Multipart parse                               |
+| POST   | /detect     | IAM (or bearer)        | Multipart detect                              |
+| GET    | /metrics    | `X-Admin-Token` header | Prometheus exposition                         |
+| GET    | /debug/info | `X-Admin-Token` header | Version + model status                        |
+
+### Local development
+
+```sh
+cargo run --features ocr-ml --example web_service_prod
+# in another terminal:
+curl -sf http://localhost:8080/live
+curl -s  http://localhost:8080/ready
+curl -s -X POST -F file=@test_data/ocr/hello_world.png http://localhost:8080/parse | jq .content
+# admin endpoints
+OMNIPARSE_ADMIN_TOKEN=adm cargo run --features ocr-ml --example web_service_prod &
+curl -sH "X-Admin-Token: adm" http://localhost:8080/metrics | head -10
+curl -sH "X-Admin-Token: adm" http://localhost:8080/debug/info | jq .
+```
+
+### Configuration
+
+All settings come from environment variables. Defaults are tuned for
+Cloud Run; override per environment.
+
+| Var                          | Default              | Purpose                                      |
+| ---------------------------- | -------------------- | -------------------------------------------- |
+| `PORT`                       | `8080`               | Cloud Run injects this                       |
+| `OMNIPARSE_BIND_ADDR`        | `0.0.0.0`            | Interface to bind                            |
+| `OMNIPARSE_MAX_BODY_BYTES`   | `26214400` (25 MB)   | Multipart body cap                           |
+| `OMNIPARSE_REQUEST_TIMEOUT_S`| `60`                 | Per-request timeout                          |
+| `OMNIPARSE_MAX_CONCURRENCY`  | `num_cpus * 2`       | Concurrent parses (above → 429)              |
+| `OMNIPARSE_AUTH_TOKEN`       | unset (use IAM)      | Bearer fallback for non-Google deploys       |
+| `OMNIPARSE_ADMIN_TOKEN`      | unset (admin off)    | Header gate for `/metrics` and `/debug/*`    |
+| `OMNIPARSE_CORS_ORIGINS`     | unset (no CORS)      | Comma-separated allow list or `*`            |
+| `OMNIPARSE_LOG`              | `info`               | `RUST_LOG`-style filter                      |
+| `OMNIPARSE_LOG_FORMAT`       | `cloud` on Cloud Run, else `pretty` | `cloud`, `json`, `pretty`     |
+| `OMNIPARSE_SHUTDOWN_GRACE_S` | `8`                  | Drain window (Cloud Run kills at 10 s)       |
+| `OMNIPARSE_READY_CACHE_S`    | `60`                 | TTL on cached `verify_all()` result          |
+| `OMNIPARSE_PREWARM`          | `1`                  | Load ML engine before listening              |
+
+### Deploy to Cloud Run
+
+```sh
+bash deploy/cloud-run/deploy.sh <gcp-project> <region> [caller-sa-email]
+```
+
+This script:
+
+1. Creates a runtime service account (`omniparse-web@PROJECT.iam.gserviceaccount.com`) and grants it Cloud Observability roles:
+   - `roles/logging.logWriter`
+   - `roles/monitoring.metricWriter`
+   - `roles/cloudtrace.agent`
+2. Deploys `ghcr.io/sirhco/omniparse-web:latest` with
+   `--no-allow-unauthenticated`. Cloud Run validates each caller's identity
+   token against the service URL before forwarding.
+3. Optionally grants `roles/run.invoker` to a caller service account so a
+   workload identity can call `/parse` and `/detect`.
+
+### Calling the deployed service
+
+```sh
+URL=$(gcloud run services describe omniparse-web --region <REGION> --format='value(status.url)')
+TOKEN=$(gcloud auth print-identity-token \
+    --impersonate-service-account=client-app@<PROJECT>.iam.gserviceaccount.com \
+    --audiences="$URL")
+curl -sf -H "Authorization: Bearer $TOKEN" \
+    -X POST -F file=@test_data/ocr/hello_world.png "$URL/parse" | jq .content
+```
+
+### Inspecting telemetry
+
+```sh
+# Logs (Cloud Logging structured JSON, trace IDs auto-correlated)
+gcloud logging read \
+    "resource.type=cloud_run_revision AND resource.labels.service_name=omniparse-web" \
+    --project <PROJECT> --limit 5 --format json | jq '.[].jsonPayload'
+
+# Trace timeline (populated by X-Cloud-Trace-Context propagation)
+gcloud trace list-traces --project <PROJECT> --limit 5
+
+# Cloud Run revision metrics (request count, p50/p95/p99 latency) come for
+# free via Cloud Monitoring without app instrumentation.
+```
+
+Application-level Prometheus metrics live at `GET /metrics` (admin-token
+gated). Counters: `omniparse_parse_total`, `omniparse_detect_total`,
+`omniparse_error_total{code="..."}`. Histograms: `omniparse_parse_seconds`.
+
+### Manifest path (advanced)
+
+If you prefer a declarative deploy, `deploy/cloud-run/service.yaml` is a
+Knative-style manifest you can apply with
+`gcloud run services replace`. Edit `serviceAccountName` and `image`
+first, or generate it from the `gcloud run deploy` output.
+
+### What's still your responsibility
+
+- TLS: Cloud Run terminates HTTPS at the LB; the app sees HTTP. Good.
+- Public access: leave `--no-allow-unauthenticated` on. Grant
+  `roles/run.invoker` only to specific SAs.
+- Secrets: store `OMNIPARSE_AUTH_TOKEN` (if used) and `OMNIPARSE_ADMIN_TOKEN`
+  in Secret Manager and reference them via `--set-secrets`.
+- Quotas / rate limits: Cloud Run has per-service concurrency; for
+  per-caller quotas, front the service with Cloud Armor or API Gateway.
+- File-content scanning: omniparse is pure-Rust (no shellouts) and far
+  safer than Tika, but untrusted PDFs / Office docs are still untrusted
+  input. Treat parse output accordingly.
+
 ## Further Reading
 
 - [Axum Documentation](https://docs.rs/axum/)
 - [Omniparse Documentation](../README.md)
 - [Tokio Runtime Guide](https://tokio.rs/)
+- [Cloud Run docs](https://cloud.google.com/run/docs)
+- [Cloud Logging structured logs](https://cloud.google.com/logging/docs/structured-logging)

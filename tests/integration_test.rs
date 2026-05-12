@@ -100,6 +100,7 @@ fn test_end_to_end_xml_extraction() {
     }
 }
 
+#[cfg(feature = "pdf")]
 #[test]
 fn test_end_to_end_pdf_extraction() {
     let result = extract_from_path("test_data/document/sample.pdf");
@@ -348,6 +349,7 @@ fn test_error_handling_corrupted_json() {
     }
 }
 
+#[cfg(feature = "pdf")]
 #[test]
 fn test_error_handling_empty_pdf() {
     let result = extract_from_path("test_data/document/empty.pdf");
@@ -436,6 +438,7 @@ fn test_is_mime_supported_common_types() {
     assert!(is_mime_supported("application/json"));
     assert!(is_mime_supported("text/csv"));
     assert!(is_mime_supported("application/xml"));
+    #[cfg(feature = "pdf")]
     assert!(is_mime_supported("application/pdf"));
     assert!(is_mime_supported("application/zip"));
 }

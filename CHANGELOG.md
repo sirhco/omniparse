@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+#### PDF robustness — three-tier lenient parsing
+- `src/parsers/document/pdf.rs` now falls back automatically when
+  `lopdf::Document::load_mem` errors. Tiers:
+  1. **strict** — unchanged lopdf load.
+  2. **repaired_xref** — scan backward for the last `%%EOF`, drop
+     trailing bytes, retry strict load. Catches PDFs with HTTP-chunk
+     garbage appended, double-`%%EOF` exports, broken linearization.
+  3. **raw_scan** — walk `stream`/`endstream` byte ranges, flate-decode
+     payloads, regex-extract `(literal) Tj` + `[...] TJ` operators.
+     Recovers text from PDFs lopdf can't load at all.
+- Every response carries `pdf_parse_strategy` metadata
+  (`strict` / `repaired_xref` / `raw_scan`). Fallback tiers also set
+  `pdf_parse_partial = true` and `pdf_parse_error = "<lopdf error>"`.
+- `pdf_version` is now populated even in `raw_scan` (scanned from the
+  `%PDF-X.Y` header — independent of trailer state).
+- Eliminates the `"Failed to load PDF: Invalid file trailer"` 422 that
+  previously rejected many real-world PDFs.
+- **Garbage-output gate**: raw_scan output is rejected when it fails a
+  "looks-like-text" heuristic (≥60% printable chars + at least one
+  4-char alphanumeric run). PDFs that use custom font `/Encoding` or
+  `/ToUnicode` CMaps, are encrypted, or use unsupported stream
+  compression produce raw bytes that look like `"\u{1}\u{2}\u{3}..."` —
+  those now surface as a parse error with a clear message instead of
+  being returned as bogus content.
+- **LZWDecode + ASCII85Decode filters** decoded in the `raw_scan` tier
+  (via `weezl` + `ascii85` — both pure-Rust, no transitive baggage). The
+  fallback now tries Flate → LZW → ASCII85 → uncompressed per stream and
+  only feeds the operator scanner whichever output contains `Tj`/`TJ`
+  tokens. Recovers text from older PDFs (LZW) and PostScript-style
+  exports (ASCII85) that previously failed the gate.
+- **4th-tier PDF fallback via `pdf-extract`** (new optional feature
+  `pdf-extract`). Captures linearized PDFs and Identity-H + /ToUnicode
+  CMap PDFs (Lucidchart exports, Word print-to-PDF, browser print-to-PDF)
+  that lopdf-based tiers can't structurally parse. Runs only when the
+  first three tiers fail and `strategy = "pdf_extract"` is set on the
+  response.
+- **`pdf` feature** (new, on by default). Wraps lopdf + weezl + ascii85;
+  enable / disable PDF support with `--features pdf` /
+  `--no-default-features`. Existing default-features users see no
+  behavior change.
+- **Acknowledgments**: README + lib.rs now credit lopdf, pdf-extract,
+  weezl, ascii85, ocrs, rten, and other pure-Rust libraries the parser
+  tiers sit on.
+
 ## [0.4.0] - 2026-05-12
 
 ### Added
@@ -30,16 +78,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### Web service + container
 - `examples/web_service.rs` now reads `OMNIPARSE_BIND` (default
-  `127.0.0.1:3000`) so the example can be containerized without a code edit.
+  `127.0.0.1:3000`) so the minimal demo can be containerized without a
+  code edit.
+- **New `examples/web_service_prod.rs`** — production-grade Axum example
+  targeting Google Cloud Run. Adds: structured Cloud Logging JSON output
+  (severity, time, message, `logging.googleapis.com/trace`,
+  `logging.googleapis.com/spanId`, labels), Prometheus `/metrics`
+  endpoint, `/live` and `/ready` probes, `X-Cloud-Trace-Context`
+  propagation, body-size + request-timeout + concurrency limits, panic
+  catcher, request-id propagation, optional bearer-token auth, model
+  pre-warm at startup, graceful shutdown sized for Cloud Run's 10 s
+  SIGKILL window, and a `--healthcheck` mode so the binary itself works
+  as the Docker `HEALTHCHECK` command on distroless.
 - New project-root `Dockerfile`: cargo-chef-cached multi-stage build (planner →
   cook → builder → models → distroless runtime). ML OCR models are downloaded
   and SHA-256-verified at build time, then copied into the final image at
-  `/opt/omniparse/models`. Final image runs distroless as UID 65532.
+  `/opt/omniparse/models`. Final image runs distroless as UID 65532 with
+  `web_service_prod` as `ENTRYPOINT`, listening on `PORT=8080`.
 - `.dockerignore` and `docker-compose.yml` to make `docker compose up --build`
-  the one-command local-dev path.
+  the one-command local-dev path (port 8080 + healthcheck + 2 GB / 2 vCPU caps).
 - `.github/workflows/release-docker.yml`: tag-triggered (`v*.*.*`) +
   `workflow_dispatch` multi-arch (`linux/amd64`, `linux/arm64`) build that
   publishes to `ghcr.io/<owner>/omniparse-web`. Uses GitHub Actions build cache.
+- **Cloud Run deploy artifacts** at `deploy/cloud-run/`: `service.yaml`
+  (Knative manifest with startup/liveness probes) and `deploy.sh` (creates
+  the runtime service account, grants `logging.logWriter` /
+  `monitoring.metricWriter` / `cloudtrace.agent`, deploys with
+  `--no-allow-unauthenticated`, optionally grants `roles/run.invoker` to a
+  caller service account).
+
+#### OCR test fixtures
+- `test_data/ocr/` ships pre-generated OCR-testable files (~48 KB total):
+  `hello_world.png` / `.jpg`, `multi_line.png`, `scanned.pdf` (image-only).
+  Each verifies cleanly with both classical and ML backends.
+- New `examples/create_ocr_fixtures.rs` regenerates them with custom fonts
+  / text. Pure Rust — uses `ab_glyph` for rasterization, `lopdf` for the
+  image-only PDF wrapper.
 
 ### Changed
 - README OCR section condensed to a 30-second quickstart; the long-form

@@ -7,7 +7,8 @@ A Rust toolkit for detecting and extracting metadata, text, and content from hun
 - **Automatic Type Detection**: Identifies file types using magic bytes, content analysis, and extension fallback
 - **Multiple Format Support**: Extracts content from 25+ formats across text, document, image, audio, and archive categories
 - **Rich Metadata Extraction**: Full EXIF for JPEG/TIFF, OpenGraph / Twitter / canonical for HTML, ID3 for MP3, OPF for EPUB, version/encryption/forms/annotations for PDF, and more
-- **OCR Subsystem (v0.3)**: Optional classical and ML OCR pipelines for images and scanned PDFs. Pure Rust. Models download on first use for the ML backend; classical backend has no external dependencies.
+- **OCR Subsystem**: Optional classical and ML OCR pipelines for images and scanned PDFs. Pure Rust. Models download on first use for the ML backend (or pre-fetch via `omniparse models download`); classical backend has no external dependencies.
+- **Production Web Service**: Ship-ready Axum example (`examples/web_service_prod.rs`) with Cloud Logging JSON, Prometheus `/metrics`, liveness/readiness probes, request limits, panic catcher, graceful shutdown — baked into the published Docker image and one-command deployable to Google Cloud Run via `deploy/cloud-run/deploy.sh`.
 - **Dual Interface**: Use as a CLI tool or integrate as a library in your Rust applications
 - **Pure Rust Implementation**: Minimal dependencies, no external system libraries required
 - **Async Support**: Optional async API for non-blocking operations
@@ -61,21 +62,21 @@ Add Omniparse to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-omniparse = "0.3"
+omniparse = "0.4"
 ```
 
 For async support:
 
 ```toml
 [dependencies]
-omniparse = { version = "0.3", features = ["async"] }
+omniparse = { version = "0.4", features = ["async"] }
 ```
 
 For parallel processing:
 
 ```toml
 [dependencies]
-omniparse = { version = "0.3", features = ["parallel"] }
+omniparse = { version = "0.4", features = ["parallel"] }
 ```
 
 ### OCR — quickstart
@@ -429,12 +430,17 @@ Omniparse follows a modular architecture:
 
 ## Documentation
 
-### Version 0.3 (current)
+### Version 0.4 (current)
 
-- **[RELEASE_NOTES_v0.3.0.md](RELEASE_NOTES_v0.3.0.md)** - Complete list of v0.3.0 enhancements, feature flags, env var reference
-- **[MIGRATION_v0.3.0.md](MIGRATION_v0.3.0.md)** - Upgrade guide from v0.2.x with breaking change details
-- **[OCR_GUIDE.md](OCR_GUIDE.md)** - Full OCR subsystem guide: classical vs ML, training, tuning, debugging
+- **[RELEASE_NOTES_v0.4.0.md](RELEASE_NOTES_v0.4.0.md)** - `omniparse models` CLI, unified `OMNIPARSE_OCR` env var, Dockerfile + GHCR image, production Cloud Run example
+- **[OCR_GUIDE.md](OCR_GUIDE.md)** - Single canonical OCR reference: backend chooser, model-cache CLI, training, tuning, debugging
+- **[examples/WEB_SERVICE_GUIDE.md](examples/WEB_SERVICE_GUIDE.md)** - Web service guide: minimal demo + production example + Cloud Run deploy
 - **[CHANGELOG.md](CHANGELOG.md)** - Full changelog
+
+### Version 0.3
+
+- **[RELEASE_NOTES_v0.3.0.md](RELEASE_NOTES_v0.3.0.md)** - v0.3.0 enhancements, feature flags, env var reference
+- **[MIGRATION_v0.3.0.md](MIGRATION_v0.3.0.md)** - Upgrade guide from v0.2.x
 
 ### General
 
@@ -469,3 +475,21 @@ at your option.
 ## Acknowledgments
 
 Inspired by [Apache Tika](https://tika.apache.org/), the Java-based content analysis toolkit.
+
+### Core dependencies
+
+Pure-Rust crates carrying the heavy lifting. License of each is compatible with omniparse's MIT/Apache-2.0 dual license.
+
+| Crate                                                       | Used for                                                                | License             |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------- |
+| [`lopdf`](https://crates.io/crates/lopdf)                   | Strict-tier PDF parsing (xref / trailer / object dictionary, embedded-image extraction for OCR)            | MIT                 |
+| [`pdf-extract`](https://crates.io/crates/pdf-extract)       | 4th-tier PDF fallback for linearized / Identity-H + /ToUnicode CMap PDFs (Lucidchart, Word print-to-PDF). Behind the `pdf-extract` feature | MIT                 |
+| [`weezl`](https://crates.io/crates/weezl)                   | LZWDecode stream filter in the raw_scan PDF fallback                    | MIT / Apache-2.0    |
+| [`ascii85`](https://crates.io/crates/ascii85)               | ASCII85Decode stream filter in the raw_scan PDF fallback                | MIT / Apache-2.0    |
+| [`ocrs`](https://crates.io/crates/ocrs) + [`rten`](https://crates.io/crates/rten) | ML OCR backend (text-detection + text-recognition models)         | MIT                 |
+| [`image`](https://crates.io/crates/image), [`kamadak-exif`](https://crates.io/crates/kamadak-exif) | Image decode + EXIF                                            | MIT / Apache-2.0    |
+| [`calamine`](https://crates.io/crates/calamine)             | XLSX / XLS / ODS parsing                                                | MIT / Apache-2.0    |
+| [`scraper`](https://crates.io/crates/scraper) + [`cssparser`](https://crates.io/crates/cssparser) | HTML + CSS parsing                                              | ISC / MPL-2.0       |
+| [`epub`](https://crates.io/crates/epub)                     | EPUB OPF + spine walk                                                   | MIT                 |
+| [`id3`](https://crates.io/crates/id3)                       | MP3 ID3v1/v2 tags                                                       | MIT                 |
+| [`zip`](https://crates.io/crates/zip), [`tar`](https://crates.io/crates/tar), [`flate2`](https://crates.io/crates/flate2) | Archive walking + deflate                                       | MIT / Apache-2.0    |

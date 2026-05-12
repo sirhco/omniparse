@@ -18,7 +18,7 @@
 //! Use the result at runtime with:
 //!
 //! ```sh
-//! OMNIPARSE_OCR=1 OMNIPARSE_OCR_PROTOTYPES=/path/to/prototypes.json \
+//! OMNIPARSE_OCR=classical OMNIPARSE_OCR_PROTOTYPES=/path/to/prototypes.json \
 //!     cargo run --features ocr --release -- some-image.jpg
 //! ```
 
@@ -59,7 +59,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("wrote {}", out_path);
     println!();
     println!("to use at runtime:");
-    println!("  OMNIPARSE_OCR=1 OMNIPARSE_OCR_PROTOTYPES={out_path} \\");
+    println!("  OMNIPARSE_OCR=classical OMNIPARSE_OCR_PROTOTYPES={out_path} \\");
     println!("      cargo run --features ocr --release -- image.jpg");
     Ok(())
 }
