@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-05-12
+
+### Added
+
+#### OCR model management
+- New `omniparse models` CLI subcommand with four actions: `download [--force]`,
+  `verify`, `path`, `list`. Pre-fetch ML OCR models in CI / containers / air-
+  gapped installs instead of relying on the silent first-run download. Requires
+  the `ocr-ml` feature.
+- Public API in `omniparse::ocr::ml`: `ModelSpec`, `MODELS` constant slice with
+  pinned SHA-256 hashes, `prefetch_all`, `verify_all`, `list_models`,
+  `ModelStatus`. The previously-unused `sha2` dependency is now wired into the
+  download path: streamed hashes are compared to the pinned digest, and
+  cached files are re-verified on every `MlOcrEngine::new()` call.
+- `OcrError::ChecksumMismatch` now actually fires (was declared but never
+  returned).
+
+#### Unified OCR runtime gate
+- `OMNIPARSE_OCR` is now tri-state: `off` / `classical` / `ml`. New
+  `omniparse::ocr::OcrMode` enum and `omniparse::ocr::ocr_mode()` reader.
+- Legacy `OMNIPARSE_OCR=1` + `OMNIPARSE_OCR_ML=1` is still honored but emits a
+  one-shot stderr deprecation warning. Will be removed in 0.5.
+
+#### Web service + container
+- `examples/web_service.rs` now reads `OMNIPARSE_BIND` (default
+  `127.0.0.1:3000`) so the example can be containerized without a code edit.
+- New project-root `Dockerfile`: cargo-chef-cached multi-stage build (planner →
+  cook → builder → models → distroless runtime). ML OCR models are downloaded
+  and SHA-256-verified at build time, then copied into the final image at
+  `/opt/omniparse/models`. Final image runs distroless as UID 65532.
+- `.dockerignore` and `docker-compose.yml` to make `docker compose up --build`
+  the one-command local-dev path.
+- `.github/workflows/release-docker.yml`: tag-triggered (`v*.*.*`) +
+  `workflow_dispatch` multi-arch (`linux/amd64`, `linux/arm64`) build that
+  publishes to `ghcr.io/<owner>/omniparse-web`. Uses GitHub Actions build cache.
+
+### Changed
+- README OCR section condensed to a 30-second quickstart; the long-form
+  guide is now the single canonical reference in `OCR_GUIDE.md`.
+- `OCR_GUIDE.md` restructured: "30-second start" block at the top, dedicated
+  "Managing the model cache" section documenting the new CLI, all examples
+  updated to the unified `OMNIPARSE_OCR=ml|classical` env var.
+
 ## [0.3.0] - 2026-04-22
 
 ### Added

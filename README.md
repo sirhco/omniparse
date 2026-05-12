@@ -78,79 +78,27 @@ For parallel processing:
 omniparse = { version = "0.3", features = ["parallel"] }
 ```
 
-### Two OCR backends
+### OCR — quickstart
 
-v0.3 ships two optional OCR backends. Pick one based on your inputs.
-
-📖 **[Full OCR Guide →](OCR_GUIDE.md)** — training, tuning, debugging, API examples.
-
-**Classical** — pure-algorithm pipeline. No ML runtime, no downloads.
-
-```toml
-[dependencies]
-omniparse = { version = "0.3", features = ["ocr"] }
-```
-
-OCR is runtime-opt-in — set `OMNIPARSE_OCR=1` (or configure the engine
-explicitly) to activate it. See [`examples/ocr_basic.rs`](examples/ocr_basic.rs).
-
-The bundled recognizer ships with 7×9 bitmap prototypes suitable only for
-matching clean synthetic text. For real-world photos or documents, train a
-prototype set from the actual typeface using the `ocr-train` feature:
-
-```toml
-[dependencies]
-omniparse = { version = "0.3", features = ["ocr-train"] }
-```
+Two backends; one env var selects which runs.
 
 ```sh
-# generate prototypes from a font at a specific pixel size
-cargo run --features ocr-train --example train_prototypes -- \
-    /path/to/Font.ttf prototypes.json 48
+# ML backend (recommended for photos / screenshots / unknown typography)
+cargo install omniparse --features ocr-ml
+omniparse models download              # one-time, ~12 MB to user cache
+OMNIPARSE_OCR=ml omniparse photo.jpg
 
-# use them at runtime
-OMNIPARSE_OCR=1 OMNIPARSE_OCR_PROTOTYPES=prototypes.json \
-    cargo run --features ocr --release -- image.jpg
+# Classical backend (pure Rust, no downloads — clean printed scans only)
+cargo install omniparse --features ocr
+OMNIPARSE_OCR=classical omniparse scan.png
 ```
 
-Tune `OMNIPARSE_OCR_MIN_CONFIDENCE=<0.0..=1.0>` to trade noise for recall
-(default `0.15`).
+Prefer a container? `docker run --rm -p 3000:3000 ghcr.io/sirhco/omniparse-web:latest`
+launches the Axum web service with ML models baked in (see
+[`Dockerfile`](Dockerfile) and [`examples/WEB_SERVICE_GUIDE.md`](examples/WEB_SERVICE_GUIDE.md)).
 
-For photographs where text is overlaid on images, switch the layout analyzer
-to the Stroke-Width Transform:
-
-```sh
-OMNIPARSE_OCR=1 OMNIPARSE_OCR_LAYOUT=swt \
-    OMNIPARSE_OCR_PROTOTYPES=prototypes.json \
-    cargo run --features ocr --release -- photo.jpg
-```
-
-Multi-scale training improves recognition across different rendered sizes:
-
-```sh
-cargo run --features ocr-train --example train_prototypes -- \
-    /path/to/Font.ttf prototypes.json 24,48,96
-```
-
-### ML OCR backend (`ocr-ml`)
-
-For photographic inputs where the classical pipeline's shape-feature
-classifier can't recover text, enable the ML backend:
-
-```toml
-[dependencies]
-omniparse = { version = "0.3", features = ["ocr-ml"] }
-```
-
-```sh
-OMNIPARSE_OCR=1 OMNIPARSE_OCR_ML=1 \
-    cargo run --features ocr-ml --release -- photo.jpg
-```
-
-Uses `ocrs` + `rten` (both pure Rust, MIT). Pre-trained detection +
-recognition models download once (~30 MB) to the user cache directory.
-Override the cache location with `OMNIPARSE_OCR_MODELS=<path>`. No models
-are bundled in the crate.
+📖 **[Full OCR Guide →](OCR_GUIDE.md)** — backend chooser, model-cache CLI,
+training custom prototypes, tuning, debugging, library API, FAQ.
 
 ### As a CLI Tool
 

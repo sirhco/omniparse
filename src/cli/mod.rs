@@ -9,4 +9,5 @@
 //! output format, and processing mode (sequential or parallel).
 
 pub mod args;
+pub mod models;
 pub mod output;

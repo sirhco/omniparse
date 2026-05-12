@@ -1,0 +1,25 @@
+# Single-service compose for local development of the omniparse web API.
+#
+#   docker compose up --build       # build + run
+#   curl -s http://localhost:3000/health
+#   curl -s -X POST -F file=@test_data/image/sample.png http://localhost:3000/parse
+#
+# To use a host-side model cache instead of the baked-in one, set
+# OMNIPARSE_OCR_MODELS in the environment and mount a volume there.
+
+services:
+  omniparse-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: omniparse-web:dev
+    ports:
+      - "3000:3000"
+    environment:
+      OMNIPARSE_OCR: "ml"
+      OMNIPARSE_BIND: "0.0.0.0:3000"
+      # Override to /models and add a volume below to use a host-side cache:
+      # OMNIPARSE_OCR_MODELS: "/models"
+    # volumes:
+    #   - ./my-models:/models:ro
+    restart: unless-stopped

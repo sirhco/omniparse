@@ -521,13 +521,71 @@ fn draw_region_overlay(
     out
 }
 
-/// Runtime gate checked by image parsers. `true` when explicitly opted in via
-/// `OMNIPARSE_OCR=1`; otherwise `false` so enabling the `ocr` Cargo feature
-/// alone does not silently slow every image parse.
-pub fn runtime_enabled() -> bool {
-    std::env::var("OMNIPARSE_OCR")
+/// Tri-state OCR backend selector read from the `OMNIPARSE_OCR` env var.
+///
+/// Accepted values (case-insensitive):
+/// - `off` / `0` / `false` / unset → [`OcrMode::Off`]
+/// - `classical` / `on` / `1` / `true` → [`OcrMode::Classical`]
+/// - `ml` / `ocr-ml` → [`OcrMode::Ml`]
+///
+/// Legacy `OMNIPARSE_OCR_ML=1` is still honored (and upgrades a Classical
+/// selection to Ml) but emits a one-shot deprecation warning to stderr.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum OcrMode {
+    Off,
+    Classical,
+    Ml,
+}
+
+fn warn_legacy_ml_once() {
+    use std::sync::OnceLock;
+    static WARNED: OnceLock<()> = OnceLock::new();
+    WARNED.get_or_init(|| {
+        eprintln!(
+            "omniparse: OMNIPARSE_OCR_ML is deprecated; use OMNIPARSE_OCR=ml instead. \
+             Legacy behavior will be removed in 0.5."
+        );
+    });
+}
+
+/// Resolve the OCR runtime mode from environment. See [`OcrMode`] for the
+/// accepted values.
+pub fn ocr_mode() -> OcrMode {
+    let raw = std::env::var("OMNIPARSE_OCR").unwrap_or_default();
+    let legacy_ml = std::env::var("OMNIPARSE_OCR_ML")
         .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false)
+        .unwrap_or(false);
+    let mode = match raw.to_ascii_lowercase().as_str() {
+        "" | "0" | "off" | "false" => OcrMode::Off,
+        "ml" | "ocr-ml" => OcrMode::Ml,
+        "classical" | "1" | "true" | "on" => {
+            if legacy_ml {
+                warn_legacy_ml_once();
+                OcrMode::Ml
+            } else {
+                OcrMode::Classical
+            }
+        }
+        other => {
+            eprintln!(
+                "omniparse: unknown OMNIPARSE_OCR={:?}; treating as off",
+                other
+            );
+            OcrMode::Off
+        }
+    };
+    if mode == OcrMode::Off && legacy_ml {
+        warn_legacy_ml_once();
+        return OcrMode::Ml;
+    }
+    mode
+}
+
+/// Runtime gate checked by image parsers. `true` for either backend; `false`
+/// when OCR is off so enabling the `ocr` Cargo feature alone does not
+/// silently slow every image parse.
+pub fn runtime_enabled() -> bool {
+    ocr_mode() != OcrMode::Off
 }
 
 /// Convenience: run OCR against a file path.

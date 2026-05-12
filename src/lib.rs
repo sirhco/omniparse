@@ -96,16 +96,21 @@
 //! }
 //! ```
 //!
-//! ## OCR (v0.3)
+//! ## OCR
 //!
-//! OCR is runtime-opt-in via `OMNIPARSE_OCR=1` plus the `ocr` or `ocr-ml`
-//! Cargo feature. Image parsers automatically route through OCR when the
-//! gate is set and populate `ocr_status` / `ocr_confidence` / `ocr_applied`
+//! Off by default. One env var selects the backend at runtime:
+//!
+//! - `OMNIPARSE_OCR=classical` — pure-Rust classical pipeline (`ocr` feature)
+//! - `OMNIPARSE_OCR=ml` — ML backend via `ocrs` + `rten` (`ocr-ml` feature)
+//! - `OMNIPARSE_OCR=off` / unset — OCR disabled (image parsers extract EXIF only)
+//!
+//! Image and PDF parsers automatically route through OCR when the gate is
+//! set and populate `ocr_status` / `ocr_confidence` / `ocr_applied`
 //! metadata.
 //!
 //! ```no_run
 //! # #[cfg(feature = "ocr")] {
-//! // OMNIPARSE_OCR=1 in the environment activates OCR for image parsers.
+//! // OMNIPARSE_OCR=classical (or =ml) activates OCR for image parsers.
 //! let result = omniparse::extract_from_path("photo.jpg")?;
 //! if let Some(status) = result.metadata.get("ocr_status") {
 //!     println!("ocr_status = {status:?}");
@@ -127,8 +132,9 @@
 //! # Ok::<(), omniparse::Error>(())
 //! ```
 //!
-//! ML backend (requires `ocr-ml` feature, pre-trained models download on
-//! first use):
+//! ML backend (requires `ocr-ml` feature; pre-trained models are downloaded
+//! and SHA-256-verified on first use, or pre-fetched via the CLI
+//! `omniparse models download`):
 //!
 //! ```no_run
 //! # #[cfg(feature = "ocr-ml")] {
@@ -140,8 +146,8 @@
 //! # Ok::<(), omniparse::Error>(())
 //! ```
 //!
-//! See [`OCR_GUIDE.md`] for training, tuning, debugging, and the full env
-//! var reference.
+//! See [`OCR_GUIDE.md`] for the model-cache CLI, training custom
+//! prototypes, tuning, debugging, and the full env-var reference.
 //!
 //! [`SUPPORTED_FORMATS.md`]: https://github.com/sirhco/omniparse/blob/main/SUPPORTED_FORMATS.md
 //! [`OCR_GUIDE.md`]: https://github.com/sirhco/omniparse/blob/main/OCR_GUIDE.md

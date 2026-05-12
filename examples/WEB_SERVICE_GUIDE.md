@@ -264,25 +264,42 @@ let app = Router::new()
 
 ### Docker Deployment
 
-Create a `Dockerfile`:
+A production-ready multi-stage `Dockerfile` lives at the project root. It
+bakes the ML OCR models into the image at `/opt/omniparse/models` (SHA-256
+verified at build time) and ships a distroless runtime under a non-root UID.
 
-```dockerfile
-FROM rust:1.75 as builder
-WORKDIR /app
-COPY . .
-RUN cargo build --release --example web_service
+```sh
+# Build locally
+docker build -t omniparse-web:dev .
 
-FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/examples/web_service /usr/local/bin/web_service
-EXPOSE 3000
-CMD ["web_service"]
+# Or use the pre-published image (multi-arch: linux/amd64 + linux/arm64)
+docker pull ghcr.io/sirhco/omniparse-web:latest
+docker run --rm -p 3000:3000 ghcr.io/sirhco/omniparse-web:latest
 ```
 
-Build and run:
-```bash
-docker build -t omniparse-web .
-docker run -p 3000:3000 omniparse-web
+For local development, a `docker-compose.yml` is also provided:
+
+```sh
+docker compose up --build
+```
+
+Runtime knobs honored by the image:
+
+| Env var                  | Default                  | Purpose                              |
+| ------------------------ | ------------------------ | ------------------------------------ |
+| `OMNIPARSE_BIND`         | `0.0.0.0:3000`           | Address to listen on                 |
+| `OMNIPARSE_OCR`          | `ml`                     | OCR backend (`off`/`classical`/`ml`) |
+| `OMNIPARSE_OCR_MODELS`   | `/opt/omniparse/models`  | Where to read the rten models from   |
+
+To use a host-side model cache instead of the baked-in one, mount a volume
+over `/opt/omniparse/models` (or override `OMNIPARSE_OCR_MODELS` and mount
+elsewhere):
+
+```sh
+docker run --rm -p 3000:3000 \
+  -e OMNIPARSE_OCR_MODELS=/models \
+  -v "$PWD/my-models:/models:ro" \
+  ghcr.io/sirhco/omniparse-web:latest
 ```
 
 ### Performance Tips

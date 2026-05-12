@@ -1,41 +1,16 @@
 //! Command-line argument definitions
 //!
 //! This module defines the CLI argument structure using Clap's derive API.
-//! It provides a type-safe way to parse and access command-line arguments.
+//! Two invocation shapes are supported:
 //!
-//! # Examples
-//!
-//! ```no_run
-//! use clap::Parser;
-//! use omniparse::cli::args::Cli;
-//!
-//! let args = Cli::parse();
-//! println!("Processing {} files", args.files.len());
-//! println!("Output format: {:?}", args.format);
-//! ```
+//! 1. Bare extraction: `omniparse [FILES...]` — the historical default.
+//! 2. Subcommands: `omniparse <subcommand> ...` — currently just `models`
+//!    for managing the ML OCR model cache.
 
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 /// Omniparse - Extract text and metadata from various file formats
-///
-/// This is the main CLI structure that defines all command-line arguments
-/// and options for the Omniparse tool.
-///
-/// Supports 35+ file formats including:
-/// - Text: TXT, JSON, CSV, XML, HTML, CSS, RTF
-/// - Documents: PDF, DOCX, DOC, XLSX, XLS, PPTX, PPT, ODT, ODS, ODP
-/// - Images: JPEG, PNG, TIFF
-/// - Archives: ZIP, TAR
-///
-/// # Examples
-///
-/// Basic usage:
-/// ```bash
-/// omniparse document.pdf
-/// omniparse --format json file1.txt file2.docx
-/// omniparse --metadata-only --output results.json *.pdf
-/// ```
 #[derive(Parser, Debug)]
 #[command(name = "omniparse")]
 #[command(version)]
@@ -50,12 +25,20 @@ Examples:\n\
   omniparse document.pdf\n\
   omniparse --format json webpage.html\n\
   omniparse --metadata-only spreadsheet.xlsx\n\
-  omniparse --parallel *.pdf *.docx")]
+  omniparse --parallel *.pdf *.docx\n\
+  omniparse models download           # pre-fetch ML OCR models\n\
+  omniparse models verify             # check sha256 of cached models")]
+#[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
 pub struct Cli {
-    /// Input file paths to process
+    /// Optional subcommand. When absent, the bare extraction flow runs over
+    /// `files`.
+    #[command(subcommand)]
+    pub command: Option<Command>,
+
+    /// Input file paths to process (bare extraction mode).
     ///
     /// One or more file paths to extract content from. Supports glob patterns
-    /// when expanded by the shell.
+    /// when expanded by the shell. Required unless a subcommand is given.
     #[arg(required = true)]
     pub files: Vec<PathBuf>,
 
@@ -69,55 +52,57 @@ pub struct Cli {
     pub format: OutputFormat,
 
     /// Extract metadata only (no content)
-    ///
-    /// When enabled, only metadata is extracted and displayed. The actual
-    /// content (text or binary) is not included in the output.
     #[arg(short, long)]
     pub metadata_only: bool,
 
     /// Detect file type only (no extraction)
-    ///
-    /// When enabled, only file type detection is performed. No parsing or
-    /// content extraction occurs. Useful for quickly identifying file types.
     #[arg(short, long)]
     pub detect_only: bool,
 
     /// Output file path (stdout if not specified)
-    ///
-    /// If provided, results are written to this file instead of stdout.
     #[arg(short, long)]
     pub output: Option<PathBuf>,
 
     /// Enable verbose output
-    ///
-    /// Prints additional information to stderr, including progress messages
-    /// and summary statistics for batch operations.
     #[arg(short, long)]
     pub verbose: bool,
 
     /// Process files in parallel
-    ///
-    /// When enabled and the `parallel` feature is available, files are
-    /// processed in parallel using multiple threads for better performance.
     #[arg(short, long)]
     pub parallel: bool,
 }
 
+/// Top-level subcommands.
+#[derive(Subcommand, Debug)]
+pub enum Command {
+    /// Manage the ML OCR model cache (download / verify / inspect).
+    Models {
+        #[command(subcommand)]
+        action: ModelsAction,
+    },
+}
+
+/// `omniparse models <action>`.
+#[derive(Subcommand, Debug)]
+pub enum ModelsAction {
+    /// Download every required ML OCR model into the cache directory.
+    Download {
+        /// Re-download even if a valid cached copy is present.
+        #[arg(long)]
+        force: bool,
+    },
+    /// Re-hash each cached model and compare against the pinned SHA-256.
+    Verify,
+    /// Print the resolved model cache directory and exit.
+    Path,
+    /// List each model: name, on-disk size, sha256, ok/missing.
+    List,
+}
+
 /// Output format options
-///
-/// Defines the available output formats for extraction results.
 #[derive(Clone, Debug, ValueEnum)]
 pub enum OutputFormat {
-    /// Plain text output
-    ///
-    /// Human-readable format with labeled sections for metadata and content.
     Text,
-    /// JSON output
-    ///
-    /// Structured JSON format suitable for programmatic processing.
     Json,
-    /// YAML output
-    ///
-    /// YAML format, similar to JSON but more human-readable.
     Yaml,
 }

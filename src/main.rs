@@ -3,7 +3,7 @@
 mod cli;
 
 use clap::Parser;
-use cli::args::{Cli, OutputFormat};
+use cli::args::{Cli, Command, OutputFormat};
 use cli::output::{format_detection_result, format_extraction_result};
 use omniparse::extract_from_path;
 use std::fs::File;
@@ -12,7 +12,13 @@ use std::process;
 
 fn main() {
     let args = Cli::parse();
-    
+
+    // Subcommand path bypasses the extraction flow entirely.
+    if let Some(Command::Models { action }) = &args.command {
+        let code = cli::models::run(action);
+        process::exit(code);
+    }
+
     if let Err(e) = run(args) {
         eprintln!("Error: {}", e);
         process::exit(1);
