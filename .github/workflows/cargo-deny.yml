@@ -1,0 +1,32 @@
+name: cargo-deny
+
+# License + dependency policy gate. Enforces deny.toml:
+#   - licenses: permissive-only; GPL/AGPL/standalone-LGPL fail the build
+#     (guards against a repeat of the GPL-3.0 `epub` crate slipping into
+#     the default feature set).
+#   - advisories: RustSec security/yanked checks.
+#   - bans / sources: dependency hygiene.
+#
+# Triggers:
+#   - Push to main
+#   - Any pull request
+#   - Manual run from the Actions tab
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-deny:
+    name: cargo-deny check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check
