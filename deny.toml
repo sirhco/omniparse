@@ -10,6 +10,11 @@
 # `exceptions`, so a *new* MPL (or other copyleft) dependency still trips
 # the check and must be reviewed deliberately.
 
+[graph]
+# Evaluate every optional feature (PDF, OCR stack, async, etc.) so the
+# policy covers all crates a consumer could pull, not just defaults.
+all-features = true
+
 [licenses]
 version = 2
 confidence-threshold = 0.8
@@ -43,6 +48,11 @@ allow = ["MPL-2.0"]
 [[licenses.exceptions]]
 name = "selectors"
 allow = ["MPL-2.0"]
+# option-ext (MPL-2.0) comes via dirs -> dirs-sys, used by the optional
+# `ocr-ml` feature for model cache locations.
+[[licenses.exceptions]]
+name = "option-ext"
+allow = ["MPL-2.0"]
 
 [bans]
 multiple-versions = "warn"
@@ -52,9 +62,22 @@ wildcards = "allow"
 version = 2
 yanked = "deny"
 ignore = [
-    # fxhash (unmaintained) is pulled transitively via scraper -> selectors.
-    # No fix until scraper upgrades; revisit on scraper bump. Not a license issue.
+    # fxhash (unmaintained), via scraper -> selectors. No fix until scraper
+    # upgrades. Not a security vulnerability.
     "RUSTSEC-2025-0057",
+
+    # --- Optional OCR stack (imageproc 0.23) — not in the default build. ---
+    # Unmaintained-only advisories, no security impact, no upgrade path
+    # without the imageproc/image bump below:
+    "RUSTSEC-2025-0058", # custom_derive, via imageproc -> conv
+    "RUSTSEC-2024-0436", # paste, via imageproc -> nalgebra -> simba
+    "RUSTSEC-2021-0140", # rusttype, via imageproc
+    # Real nalgebra (0.30) vulnerabilities — bounds-check / soundness.
+    # Only reachable via the optional `ocr`/`ocr-ml`/`ocr-train` features.
+    # TODO: fix by bumping imageproc 0.23 -> 0.27 (requires image 0.24 ->
+    # 0.25 migration) + dirs 5 -> 6. Tracked in #9.
+    "RUSTSEC-2026-0116", # nalgebra
+    "RUSTSEC-2026-0117", # nalgebra
 ]
 
 [sources]
