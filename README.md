@@ -527,6 +527,6 @@ Pure-Rust crates carrying the heavy lifting. License of each is compatible with 
 | [`image`](https://crates.io/crates/image), [`kamadak-exif`](https://crates.io/crates/kamadak-exif) | Image decode + EXIF                                            | MIT / Apache-2.0    |
 | [`calamine`](https://crates.io/crates/calamine)             | XLSX / XLS / ODS parsing                                                | MIT / Apache-2.0    |
 | [`scraper`](https://crates.io/crates/scraper) + [`cssparser`](https://crates.io/crates/cssparser) | HTML + CSS parsing                                              | ISC / MPL-2.0       |
-| [`epub`](https://crates.io/crates/epub)                     | EPUB OPF + spine walk                                                   | MIT                 |
+| [`rbook`](https://crates.io/crates/rbook)                   | EPUB 2/3 OPF metadata + reading-order text                             | Apache-2.0          |
 | [`id3`](https://crates.io/crates/id3)                       | MP3 ID3v1/v2 tags                                                       | MIT                 |
 | [`zip`](https://crates.io/crates/zip), [`tar`](https://crates.io/crates/tar), [`flate2`](https://crates.io/crates/flate2) | Archive walking + deflate                                       | MIT / Apache-2.0    |

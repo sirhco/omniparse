@@ -47,7 +47,7 @@ pdf-extract = { version = "0.7", optional = true }
 # Optional format-specific parsers (default on; users can turn off for
 # slimmer dependency trees via --no-default-features).
 pulldown-cmark = { version = "0.10", optional = true, default-features = false }
-epub = { version = "2.1", optional = true }
+rbook = { version = "0.7", optional = true, default-features = false }
 id3 = { version = "1", optional = true }
 
 # HTML and CSS parsing
@@ -83,7 +83,7 @@ parallel = ["rayon"]
 markdown = ["dep:pulldown-cmark"]
 svg = []       # reuses existing quick-xml
 webp = []      # reuses existing image + kamadak-exif
-epub = ["dep:epub"]
+epub = ["dep:rbook"]
 mp3 = ["dep:id3"]
 # PDF parsing via `lopdf` (strict tier) + `weezl`/`ascii85` (raw_scan tier).
 # On by default; disable with `--no-default-features` for builds that don't

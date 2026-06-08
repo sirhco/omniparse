@@ -1,9 +1,10 @@
-//! EPUB parser. Reads metadata from OPF and concatenates chapter text from
-//! the spine. Delegates container/ZIP handling to the `epub` crate.
+//! EPUB parser. Reads metadata from OPF and concatenates chapter text in
+//! reading order. Delegates container/ZIP handling to the `rbook` crate
+//! (Apache-2.0). Supports EPUB 2 and 3.
 
 use crate::core::{Content, Error, ExtractionResult, Metadata, MetadataValue, Result};
 use crate::parsers::Parser;
-use epub::doc::EpubDoc;
+use rbook::Epub;
 use std::io::Cursor;
 
 pub struct EpubParser;
@@ -18,32 +19,28 @@ impl Parser for EpubParser {
     }
 
     fn parse(&self, data: &[u8], mime_type: &str) -> Result<ExtractionResult> {
-        let mut doc = EpubDoc::from_reader(Cursor::new(data))
+        // `rbook` requires the reader to be `'static`, so own the bytes.
+        let epub = Epub::read(Cursor::new(data.to_vec()))
             .map_err(|e| Error::ParseError(format!("Failed to open EPUB: {e}")))?;
 
         let mut metadata = Metadata::new();
 
-        // `doc.metadata` is `Vec<MetadataItem { property, value, .. }>` and
-        // `property` is the OPF name ("title", "creator", …). Take the first
-        // value per key.
-        let first_value = |key: &str| -> Option<String> {
-            doc.metadata
-                .iter()
-                .find(|m| m.property == key)
-                .map(|m| m.value.clone())
-        };
-        for (opf_key, out_key) in [
-            ("title", "title"),
-            ("creator", "author"),
-            ("publisher", "publisher"),
-            ("language", "language"),
-            ("description", "description"),
-            ("rights", "rights"),
-            ("date", "publication_date"),
-            ("subject", "keywords"),
-            ("identifier", "identifier"),
-        ] {
-            if let Some(value) = first_value(opf_key) {
+        // rbook exposes typed metadata accessors. Each typed entry yields its
+        // OPF value via `MetaEntry::value()`. (Note: rbook 0.7 has no typed
+        // accessor for `rights`, so that key is not extracted.)
+        let md = epub.metadata();
+        let fields: [(&str, Option<&str>); 8] = [
+            ("title", md.title().map(|t| t.value())),
+            ("author", md.creators().next().map(|c| c.value())),
+            ("publisher", md.publishers().next().map(|p| p.value())),
+            ("language", md.language().map(|l| l.value())),
+            ("description", md.description().map(|d| d.value())),
+            ("publication_date", md.published_entry().map(|e| e.value())),
+            ("keywords", md.tags().next().map(|t| t.value())),
+            ("identifier", md.identifier().map(|i| i.value())),
+        ];
+        for (out_key, value) in fields {
+            if let Some(value) = value {
                 let trimmed = value.trim();
                 if !trimmed.is_empty() {
                     metadata.insert(out_key.into(), MetadataValue::Text(trimmed.to_string()));
@@ -53,29 +50,22 @@ impl Parser for EpubParser {
 
         metadata.insert(
             "spine_count".into(),
-            MetadataValue::Number(doc.spine.len() as i64),
+            MetadataValue::Number(epub.spine().len() as i64),
         );
         metadata.insert(
             "resource_count".into(),
-            MetadataValue::Number(doc.resources.len() as i64),
+            MetadataValue::Number(epub.manifest().len() as i64),
         );
 
-        // Walk spine, concatenate textual chapter bodies. Each chapter arrives
-        // as XHTML; strip tags with scraper.
+        // Walk readable content in canonical order, concatenate textual chapter
+        // bodies. Each chapter arrives as XHTML; strip tags with scraper.
         let mut text = String::new();
-        loop {
-            match doc.get_current_str() {
-                Some((html, _mime)) => {
-                    let extracted = strip_html(&html);
-                    if !extracted.trim().is_empty() {
-                        text.push_str(&extracted);
-                        text.push_str("\n\n");
-                    }
-                }
-                None => {}
-            }
-            if !doc.go_next() {
-                break;
+        let mut reader = epub.reader();
+        while let Some(Ok(content)) = reader.read_next() {
+            let extracted = strip_html(content.content());
+            if !extracted.trim().is_empty() {
+                text.push_str(&extracted);
+                text.push_str("\n\n");
             }
         }
 

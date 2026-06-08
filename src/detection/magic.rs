@@ -77,8 +77,13 @@ pub fn detect_openxml_type(data: &[u8]) -> Option<String> {
         let mut mimetype = String::new();
         if mimetype_file.read_to_string(&mut mimetype).is_ok() {
             let trimmed = mimetype.trim();
-            // Return the exact MIME type from the mimetype file
-            if trimmed.starts_with("application/vnd.oasis.opendocument.") {
+            // Return the exact MIME type from the mimetype file. Both
+            // OpenDocument and EPUB declare their type in a stored `mimetype`
+            // entry; without the EPUB case here a `.epub` (being a ZIP) would
+            // fall through to the generic PK magic pattern and misdetect as DOCX.
+            if trimmed.starts_with("application/vnd.oasis.opendocument.")
+                || trimmed == "application/epub+zip"
+            {
                 return Some(trimmed.to_string());
             }
         }

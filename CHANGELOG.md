@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+#### EPUB: swap GPL-3.0 `epub` crate for Apache-2.0 `rbook`
+- Replaced the `epub` crate (License: **GPL-3.0**, copyleft) with
+  [`rbook`](https://crates.io/crates/rbook) **0.7** (License: **Apache-2.0**).
+  The `epub` crate shipped in the default feature set, so `cargo deny` flagged
+  it as silently pulling strong copyleft into any downstream default build.
+  `rbook` is permissive, so the `epub` feature stays **on by default** and keeps
+  its name — only the underlying dependency changed.
+- `rbook` supports EPUB 2 **and** 3 and walks readable content in canonical
+  order. Extracted metadata is unchanged (title, author, publisher, language,
+  description, publication_date, keywords, identifier, spine_count,
+  resource_count) **except** `rights`, which has no typed accessor in `rbook`
+  0.7 and is no longer emitted.
+
 ### Added
 
 #### PDF robustness — three-tier lenient parsing
