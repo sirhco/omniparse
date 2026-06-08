@@ -515,7 +515,7 @@ Inspired by [Apache Tika](https://tika.apache.org/), the Java-based content anal
 
 ### Core dependencies
 
-Pure-Rust crates carrying the heavy lifting. License of each is compatible with omniparse's MIT/Apache-2.0 dual license.
+Pure-Rust crates carrying the heavy lifting. Every license below is permissive and compatible with omniparse's MIT/Apache-2.0 dual license. The only copyleft is `cssparser`'s **MPL-2.0**, which is weak/file-level — it covers only that crate's own files and does not affect omniparse's license. A `deny.toml` policy enforces this (no GPL/AGPL allowed); see [Dependency licensing](#dependency-licensing) below.
 
 | Crate                                                       | Used for                                                                | License             |
 | ----------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------- |
@@ -523,10 +523,29 @@ Pure-Rust crates carrying the heavy lifting. License of each is compatible with 
 | [`pdf-extract`](https://crates.io/crates/pdf-extract)       | 4th-tier PDF fallback for linearized / Identity-H + /ToUnicode CMap PDFs (Lucidchart, Word print-to-PDF). Behind the `pdf-extract` feature | MIT                 |
 | [`weezl`](https://crates.io/crates/weezl)                   | LZWDecode stream filter in the raw_scan PDF fallback                    | MIT / Apache-2.0    |
 | [`ascii85`](https://crates.io/crates/ascii85)               | ASCII85Decode stream filter in the raw_scan PDF fallback                | MIT / Apache-2.0    |
-| [`ocrs`](https://crates.io/crates/ocrs) + [`rten`](https://crates.io/crates/rten) | ML OCR backend (text-detection + text-recognition models)         | MIT                 |
-| [`image`](https://crates.io/crates/image), [`kamadak-exif`](https://crates.io/crates/kamadak-exif) | Image decode + EXIF                                            | MIT / Apache-2.0    |
-| [`calamine`](https://crates.io/crates/calamine)             | XLSX / XLS / ODS parsing                                                | MIT / Apache-2.0    |
-| [`scraper`](https://crates.io/crates/scraper) + [`cssparser`](https://crates.io/crates/cssparser) | HTML + CSS parsing                                              | ISC / MPL-2.0       |
-| [`epub`](https://crates.io/crates/epub)                     | EPUB OPF + spine walk                                                   | MIT                 |
+| [`ocrs`](https://crates.io/crates/ocrs) + [`rten`](https://crates.io/crates/rten) | ML OCR backend (text-detection + text-recognition models)         | MIT / Apache-2.0    |
+| [`image`](https://crates.io/crates/image)                   | Image decode                                                            | MIT / Apache-2.0    |
+| [`kamadak-exif`](https://crates.io/crates/kamadak-exif)     | EXIF metadata                                                           | BSD-2-Clause        |
+| [`calamine`](https://crates.io/crates/calamine)             | XLSX / XLS / ODS parsing                                                | MIT                 |
+| [`scraper`](https://crates.io/crates/scraper) + [`cssparser`](https://crates.io/crates/cssparser) | HTML + CSS parsing                                              | ISC (scraper) / MPL-2.0 (cssparser) |
+| [`rbook`](https://crates.io/crates/rbook)                   | EPUB 2/3 OPF metadata + reading-order text                             | Apache-2.0          |
 | [`id3`](https://crates.io/crates/id3)                       | MP3 ID3v1/v2 tags                                                       | MIT                 |
-| [`zip`](https://crates.io/crates/zip), [`tar`](https://crates.io/crates/tar), [`flate2`](https://crates.io/crates/flate2) | Archive walking + deflate                                       | MIT / Apache-2.0    |
+| [`zip`](https://crates.io/crates/zip)                       | ZIP / Office / EPUB container walking                                   | MIT                 |
+| [`tar`](https://crates.io/crates/tar), [`flate2`](https://crates.io/crates/flate2) | TAR walking + deflate                                           | MIT / Apache-2.0    |
+
+### Dependency licensing
+
+omniparse is `MIT OR Apache-2.0`. To keep the dependency tree free of
+unexpected copyleft, the repo ships a [`deny.toml`](deny.toml) policy
+enforced in CI ([`cargo deny`](https://github.com/EmbarkStudios/cargo-deny)):
+
+- Only permissive licenses are allowed; **GPL / AGPL / standalone LGPL are
+  rejected.** A dependency carrying one fails the build.
+- Weak file-level **MPL-2.0** (e.g. `cssparser`) is allowed only for the
+  specific crates known to use it, via scoped exceptions — a *new* copyleft
+  dependency still trips the check.
+- The check runs with all features enabled, so optional stacks (PDF, OCR)
+  are covered too.
+
+This was added after the `epub` crate (GPL-3.0) was found shipping in the
+default feature set; it has since been replaced by `rbook` (Apache-2.0).
