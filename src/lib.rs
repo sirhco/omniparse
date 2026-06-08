@@ -51,8 +51,14 @@
 //!   the `pdf-extract` feature) — 4th-tier text extraction for PDFs that
 //!   lopdf can't load. MIT licensed.
 //!
+//! EPUB support uses:
+//!
+//! - [`rbook`](https://crates.io/crates/rbook) (behind the `epub` feature) —
+//!   EPUB 2/3 OPF metadata + reading-order text extraction. Apache-2.0.
+//!
 //! See `Cargo.toml` for the full dependency tree and per-crate version
-//! pins.
+//! pins. A `deny.toml` policy (enforced in CI via `cargo deny`) keeps the
+//! dependency tree free of GPL/AGPL copyleft.
 //!
 //! ## PDF parsing tiers
 //!

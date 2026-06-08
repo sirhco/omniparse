@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-06-08
+
 ### Changed
 
 #### EPUB: swap GPL-3.0 `epub` crate for Apache-2.0 `rbook`
@@ -22,7 +24,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resource_count) **except** `rights`, which has no typed accessor in `rbook`
   0.7 and is no longer emitted.
 
+#### Documentation: corrected dependency license table
+- Fixed several wrong entries in the README acknowledgments table so the
+  listed licenses match what each crate actually publishes (the `epub` row
+  previously claimed MIT but the crate was GPL-3.0). Corrections:
+  `kamadak-exif` is **BSD-2-Clause** (not MIT/Apache); `calamine` and `zip`
+  are **MIT** only; `cssparser` is **MPL-2.0** and `scraper` is **ISC**
+  (previously conflated); `ocrs`/`rten` are **MIT OR Apache-2.0**.
+
 ### Added
+
+#### Dependency license policy (`deny.toml` + CI)
+- Added a [`cargo deny`](https://github.com/EmbarkStudios/cargo-deny) policy
+  and GitHub Actions workflow. Only permissive licenses are allowed;
+  GPL/AGPL/standalone-LGPL are rejected, so a copyleft dependency can no
+  longer enter the tree unnoticed. Weak file-level MPL-2.0 is permitted only
+  for the specific known crates via scoped exceptions. The check runs with
+  all features enabled.
+- Unmaintained/vulnerable advisories in the optional OCR stack
+  (`imageproc` 0.23) are documented and ignored pending a dependency bump
+  (see issue #9).
 
 #### PDF robustness — three-tier lenient parsing
 - `src/parsers/document/pdf.rs` now falls back automatically when
@@ -65,13 +86,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `--no-default-features`. Existing default-features users see no
   behavior change.
 - **Acknowledgments**: README + lib.rs now credit lopdf, pdf-extract,
-  weezl, ascii85, ocrs, rten, and other pure-Rust libraries the parser
-  tiers sit on.
+  weezl, ascii85, ocrs, rten, `rbook` (EPUB), and other pure-Rust
+  libraries the parser tiers sit on, each with its correct license.
 - **Maximal Docker image**: the published image now builds with every
   capability flag enabled:
   `ocr-ml ocr-train ocr-parallel pdf-extract async parallel` plus the
   default set (`pdf markdown svg webp epub mp3`). One image covers every
   input class without needing per-team rebuilds.
+
+### Fixed
+
+#### EPUB files were misdetected as DOCX
+- `detect_openxml_type` only recognized the OpenDocument `mimetype` value, so
+  an `.epub` (being a ZIP) fell through to the generic ZIP magic pattern and
+  was misdetected as DOCX (`Failed to find document.xml`). EPUB now detects
+  as `application/epub+zip` at 0.95 confidence and reaches the EPUB parser via
+  the path/bytes flow. Added `test_data/document/sample.epub` so the EPUB
+  parser test exercises a real fixture.
 
 ## [0.4.0] - 2026-05-12
 
